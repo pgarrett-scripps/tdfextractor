@@ -1,4 +1,4 @@
-from constants import PROTON_MASS
+from .constants import PROTON_MASS
 
 def map_frame_id_to_ms1_scan(parent_precursor_map, ms1_ids):
     frame_id_ms1_scan_map = {}

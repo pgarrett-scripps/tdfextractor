@@ -1,11 +1,12 @@
 from datetime import datetime
 from pathlib import Path
 
-from constants import MS2_VERSION
-from string_templates import header_ms2_template, dda_ms2_scan_template, create_mz_int_spectra
 from tdfpy import timsdata
 from tdfpy.pandas_tdf import PandasTdf
-from utils import calculate_mass, map_precursor_to_ip2_scan_number
+
+from .constants import MS2_VERSION
+from .string_templates import header_ms2_template, dda_ms2_scan_template, create_mz_int_spectra
+from .utils import calculate_mass, map_precursor_to_ip2_scan_number
 
 
 def get_ms2_content(analysis_dir: str, include_spectra=True):
