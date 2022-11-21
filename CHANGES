@@ -1,0 +1,6 @@
+0.1.3:
+- switched to serenipy as the backend for ms2 file creation
+- removed string templates for ddams2spectra and ddapeakline
+- get_contents now returns ms2_spectra, rather than strings
+- added tests
+- using context manager for timsdata

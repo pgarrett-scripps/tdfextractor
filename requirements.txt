@@ -1,1 +1,3 @@
-tdfpy~=0.1.1
+tdfpy==0.1.2
+setuptools==57.0.0
+serenipy==0.1.2
