@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .utils import calculate_mass, map_precursor_to_ip2_scan_number
 
 
 def get_ms2_content(analysis_dir: str, include_spectra=True):
+    start_time = time.time()
 
     with timsdata.timsdata_connect(analysis_dir) as td:
 
@@ -25,6 +27,11 @@ def get_ms2_content(analysis_dir: str, include_spectra=True):
                                             pasef_frames_msms_info_df[['Precursor', 'CollisionEnergy']].values}
 
         precursors_df.dropna(subset=['MonoisotopicMz', 'Charge'], inplace=True)
+
+
+        analysis_load_time = time.time() - start_time
+        print(analysis_load_time)
+        start_time = time.time()
 
         for _, precursor_row in precursors_df.iterrows():
 
@@ -62,6 +69,9 @@ def get_ms2_content(analysis_dir: str, include_spectra=True):
                 ms2_spectra.intensity_spectra = int_arr
 
             yield ms2_spectra
+
+        spectra_time = time.time() - start_time
+        print(spectra_time)
 
 
 def generate_header(analysis_dir: str):
