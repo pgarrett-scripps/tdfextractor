@@ -7,3 +7,10 @@
 0.1.4
 - batch process msms spectra
 - updated serenipy to 0.2.6
+0.1.5
+- added iso width and mz
+- converted intensity values to ints
+- added min_intensity option
+- added tqdm support
+- improved logging/readability
+- changed constants.MS2_VERSION to be extractor version

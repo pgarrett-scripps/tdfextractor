@@ -1,2 +1,3 @@
 tdfpy==0.1.2
 serenipy==0.2.6
+tqdm==4.64.1

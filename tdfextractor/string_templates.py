@@ -4,7 +4,7 @@ header_ms2_template = 'H\tExtractor\tTimsTOF_extractor\n' \
                  'H\tDate Converted\t{date_of_creation}\n' \
                  'H\tComments\tTimsTOF_extractor written by Yu Gao, 2018\n' \
                  'H\tComments\tTimsTOF_extractor modified by Titus Jung, 2019\n' \
-                 'H\tComments\tTimsTOF_extractor modified by Patrick Garrett, 2023\n' \
+                 'H\tComments\tTimsTOF_extractor modified by Patrick Garrett, April 13th 2023\n' \
                  'H\tExtractorOptions\tMSn\n' \
                  'H\tAcquisitionMethod\tData-Dependent\n' \
                  'H\tInstrumentType\tTIMSTOF\n' \
