@@ -62,5 +62,3 @@ class TestMs2Extractor(unittest.TestCase):
         self.assertEqual(len(ms2_spectra.mz_spectra), 0)
         self.assertEqual(len(ms2_spectra.intensity_spectra), 0)
         self.assertEqual(len(ms2_spectra.charge_spectra), 0)
-
-

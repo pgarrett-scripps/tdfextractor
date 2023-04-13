@@ -4,3 +4,6 @@
 - get_contents now returns ms2_spectra, rather than strings
 - added tests
 - using context manager for timsdata
+0.1.4
+- batch process msms spectra
+- updated serenipy to 0.2.6

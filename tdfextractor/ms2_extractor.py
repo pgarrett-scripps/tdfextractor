@@ -1,6 +1,8 @@
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
 from tdfpy import timsdata
 from tdfpy.pandas_tdf import PandasTdf
@@ -10,9 +12,17 @@ from .constants import MS2_VERSION
 from .string_templates import header_ms2_template
 from .utils import calculate_mass, map_precursor_to_ip2_scan_number
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_ms2_content(analysis_dir: str, include_spectra=True):
-    start_time = time.time()
+
+def batch_iterator(input_list: List, batch_size: int):
+    for i in range(0, len(input_list), batch_size):
+        yield input_list[i:i + batch_size]
+
+
+def get_ms2_content(analysis_dir: str, include_spectra: bool = True, batch_size: int = 100,
+                    remove_charge1: bool = True, remove_empty_spectra: bool = True):
+    logging.info(f'Starting to process {analysis_dir}')
 
     with timsdata.timsdata_connect(analysis_dir) as td:
 
@@ -28,50 +38,57 @@ def get_ms2_content(analysis_dir: str, include_spectra=True):
 
         precursors_df.dropna(subset=['MonoisotopicMz', 'Charge'], inplace=True)
 
+        for precursor_rows in batch_iterator(input_list=list(precursors_df.iterrows()), batch_size=batch_size):
+            logging.info(f'Processing batch of {batch_size} precursors')
 
-        analysis_load_time = time.time() - start_time
-        print(analysis_load_time)
-        start_time = time.time()
-
-        for _, precursor_row in precursors_df.iterrows():
-
-            precursor_id = int(precursor_row['Id'])
-            parent_id = int(precursor_row['Parent'])
-            charge = int(precursor_row['Charge'])
-            ip2_scan_number = precursor_to_scan_number[precursor_id]
-            ook0 = td.scanNumToOneOverK0(parent_id, [precursor_row['ScanNumber']])[0]
-            ccs = timsdata.oneOverK0ToCCSforMz(ook0, charge, precursor_row['MonoisotopicMz'])
-            mz = precursor_row['MonoisotopicMz']
-            prec_intensity = precursor_row['Intensity']
-            mass = calculate_mass(mz, charge)
-
-            ms2_spectra = Ms2Spectra(low_scan=ip2_scan_number,
-                                     high_scan=ip2_scan_number,
-                                     mz=mz,
-                                     mass=mass,
-                                     charge=charge,
-                                     info={},
-                                     mz_spectra=[],
-                                     intensity_spectra=[],
-                                     charge_spectra=[])
-
-            ms2_spectra.parent_id = parent_id
-            ms2_spectra.precursor_id = precursor_id
-            ms2_spectra.prec_intensity = round(prec_intensity, 1)
-            ms2_spectra.ook0 = round(ook0, 4)
-            ms2_spectra.ccs = round(ccs, 4)
-            ms2_spectra.rt = round(parent_id_to_rt[parent_id], 4)
-            ms2_spectra.ce = round(precursor_id_to_collision_energy[precursor_id], 1)
-
+            pasef_ms_ms = None
             if include_spectra:
-                mz_arr, int_arr = td.readPasefMsMs([precursor_id])[precursor_id]
-                ms2_spectra.mz_spectra = mz_arr
-                ms2_spectra.intensity_spectra = int_arr
+                pasef_ms_ms = td.readPasefMsMs([int(row['Id']) for _, row in precursor_rows])
 
-            yield ms2_spectra
+            for _, precursor_row in precursor_rows:
 
-        spectra_time = time.time() - start_time
-        print(spectra_time)
+                precursor_id = int(precursor_row['Id'])
+                parent_id = int(precursor_row['Parent'])
+                charge = int(precursor_row['Charge'])
+
+                if remove_charge1 is True and charge == 1:
+                    continue
+
+                ip2_scan_number = precursor_to_scan_number[precursor_id]
+                ook0 = td.scanNumToOneOverK0(parent_id, [precursor_row['ScanNumber']])[0]
+                ccs = timsdata.oneOverK0ToCCSforMz(ook0, charge, precursor_row['MonoisotopicMz'])
+                mz = precursor_row['MonoisotopicMz']
+                prec_intensity = precursor_row['Intensity']
+                mass = calculate_mass(mz, charge)
+
+                ms2_spectra = Ms2Spectra(low_scan=ip2_scan_number,
+                                         high_scan=ip2_scan_number,
+                                         mz=mz,
+                                         mass=mass,
+                                         charge=charge,
+                                         info={},
+                                         mz_spectra=[],
+                                         intensity_spectra=[],
+                                         charge_spectra=[])
+
+                ms2_spectra.parent_id = parent_id
+                ms2_spectra.precursor_id = precursor_id
+                ms2_spectra.prec_intensity = round(prec_intensity, 1)
+                ms2_spectra.ook0 = round(ook0, 4)
+                ms2_spectra.ccs = round(ccs, 4)
+                ms2_spectra.rt = round(parent_id_to_rt[parent_id], 4)
+                ms2_spectra.ce = round(precursor_id_to_collision_energy[precursor_id], 1)
+
+                if include_spectra:
+                    ms2_spectra.mz_spectra = pasef_ms_ms[precursor_id][0]
+                    ms2_spectra.intensity_spectra = pasef_ms_ms[precursor_id][1]
+
+                    assert len(ms2_spectra.mz_spectra) == len(ms2_spectra.intensity_spectra)
+
+                    if remove_empty_spectra is True and len(ms2_spectra.mz_spectra) == 0:
+                        continue
+
+                yield ms2_spectra
 
 
 def generate_header(analysis_dir: str):
@@ -88,13 +105,12 @@ def generate_header(analysis_dir: str):
     return ms2_header
 
 
-def write_ms2_file(analysis_dir: str, include_spectra=True, output_file=None):
+def write_ms2_file(analysis_dir: str, include_spectra: bool = True, output_file: str = None, batch_size: int = 1000):
     if output_file is None:
         output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + '.ms2'
 
     ms2_header = generate_header(analysis_dir)
-    ms2_spectra = list(get_ms2_content(analysis_dir, include_spectra))
-
+    ms2_spectra = get_ms2_content(analysis_dir=analysis_dir, include_spectra=include_spectra, batch_size=batch_size)
     ms2_content = to_ms2([ms2_header], ms2_spectra)
 
     with open(output_file, 'w') as file:
