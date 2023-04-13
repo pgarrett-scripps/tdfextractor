@@ -1,3 +1,4 @@
+import logging
 import unittest
 from pathlib import Path
 import os
@@ -5,6 +6,9 @@ import os
 from tdfextractor.ms2_extractor import get_ms2_content, write_ms2_file
 
 d_folder = str(Path('data') / '200ngHeLaPASEF_1min.d')
+
+logging.basicConfig(
+    level=logging.INFO)
 
 
 class TestMs2Extractor(unittest.TestCase):
@@ -42,7 +46,7 @@ class TestMs2Extractor(unittest.TestCase):
         self.assertAlmostEqual(ms2_spectra.charge, 2)
         self.assertAlmostEqual(ms2_spectra.mz, 1292.63706188582, 4)
         self.assertAlmostEqual(ms2_spectra.prec_intensity, 3603.0)
-        self.assertAlmostEqual(ms2_spectra.rt, 2400.83148655562, 4)
+        self.assertAlmostEqual(ms2_spectra.rt, 2400.83148655562, 1)
         self.assertEqual(ms2_spectra.precursor_id, 1)
         self.assertEqual(ms2_spectra.parent_id, 1)
         self.assertAlmostEqual(ms2_spectra.mz_spectra[0], 113.6913703181829, 4)

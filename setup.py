@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='tdfextractor',
-    version='0.1.5',
+    version='0.1.6',
     description='extract mass spec files from bruker d folder',
     url='https://github.com/pgarrett-scripps/tdfextractor.git',
     author='Patrick Garrett',

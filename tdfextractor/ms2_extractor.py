@@ -13,8 +13,8 @@ from .constants import MS2_VERSION
 from .string_templates import header_ms2_template
 from .utils import calculate_mass, map_precursor_to_ip2_scan_number
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 def batch_iterator(input_list: List, batch_size: int):
     for i in range(0, len(input_list), batch_size):
@@ -41,8 +41,6 @@ def get_ms2_content(analysis_dir: str, include_spectra: bool = True, batch_size:
     Raises:
         FileNotFoundError: If the analysis directory does not exist.
     """
-    logger.info(f'Starting to process {analysis_dir}')
-
     with timsdata.timsdata_connect(analysis_dir) as td:
 
         analysis_tdf_path = str(Path(analysis_dir) / 'analysis.tdf')
@@ -55,12 +53,14 @@ def get_ms2_content(analysis_dir: str, include_spectra: bool = True, batch_size:
         parent_id_to_rt = {int(frame_id): rt for frame_id, rt in frames_df[['Id', 'Time']].values}
 
         precursor_id_to_msms_info = {int(prec_id): (ce, iso_width, iso_mz) for prec_id, ce, iso_width, iso_mz in
-                pd_tdf.pasef_frame_msms_info[['Precursor', 'CollisionEnergy', 'IsolationWidth', 'IsolationMz']].values}
+                                     pd_tdf.pasef_frame_msms_info[
+                                         ['Precursor', 'CollisionEnergy', 'IsolationWidth', 'IsolationMz']].values}
 
         precursors_df.dropna(subset=['MonoisotopicMz', 'Charge'], inplace=True)
 
-        for precursor_batch in tqdm(list(batch_iterator(input_list=list(precursors_df.iterrows()), batch_size=batch_size)),
-                                    desc='Generating MS2 Spectra'):
+        for precursor_batch in tqdm(
+                list(batch_iterator(input_list=list(precursors_df.iterrows()), batch_size=batch_size)),
+                desc='Generating MS2 Spectra'):
             pasef_ms_ms = None
             if include_spectra:
                 pasef_ms_ms = td.readPasefMsMs([int(precursor_row['Id']) for _, precursor_row in precursor_batch])
@@ -167,9 +167,10 @@ def write_ms2_file(analysis_dir: str, output_file: str = None, include_spectra: 
     if output_file is None:
         output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + '.ms2'
 
-    logger.info(f'Arguments: analysis_dir: {analysis_dir}, output_file: {output_file}, include_spectra: {include_spectra}, '
-    f'batch_size: {batch_size}, remove_charge1: {remove_charge1}, remove_empty_spectra: {remove_empty_spectra}, '
-    f'min_intensity: {min_intensity}')
+    logger.info(
+        f'Arguments: analysis_dir: {analysis_dir}, output_file: {output_file}, include_spectra: {include_spectra}, '
+        f'batch_size: {batch_size}, remove_charge1: {remove_charge1}, remove_empty_spectra: {remove_empty_spectra}, '
+        f'min_intensity: {min_intensity}')
 
     logger.info('Creating Ms2 Header')
     ms2_header = generate_header(analysis_dir)
@@ -181,6 +182,8 @@ def write_ms2_file(analysis_dir: str, output_file: str = None, include_spectra: 
 
     logger.info('Creating MS2 Contents')
     ms2_content = to_ms2([ms2_header], ms2_spectra)
+
+    time.sleep(1)  # Dumb fix for logging message overlap with tqdm progress bar
 
     logger.info('Writing Contents To File')
     with open(output_file, 'w') as file:
