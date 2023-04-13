@@ -16,3 +16,5 @@
 - changed constants.MS2_VERSION to be extractor version
 0.1.6
 - updated to tdfpy==0.1.6 (pandas==2.0.0, numpy==1.24.2)
+0.1.7
+- fixed requirements

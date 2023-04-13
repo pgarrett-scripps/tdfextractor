@@ -2,14 +2,14 @@ from setuptools import setup
 
 setup(
     name='tdfextractor',
-    version='0.1.6',
+    version='0.1.7',
     description='extract mass spec files from bruker d folder',
     url='https://github.com/pgarrett-scripps/tdfextractor.git',
     author='Patrick Garrett',
     author_email='pgarrett@scripps.edu',
     license='MIT',
     packages=['tdfextractor'],
-    install_requires=['tdfpy==0.1.2', 'serenipy==0.2.6', 'tqdm==4.64.1'],
+    install_requires=['tdfpy==0.1.6', 'serenipy==0.2.6', 'tqdm==4.65.0'],
     classifiers=[
         'Development Status :: 1 - Planning',
         'Intended Audience :: Science/Research',
