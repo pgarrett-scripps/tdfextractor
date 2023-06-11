@@ -37,7 +37,8 @@ All notable changes to this project will be documented in this file.
 - src based
 - tdfpy==0.1.7
 - Ms2 header
+- Merged dataframes instead of keeping dicts
 ### Added
 - workflows: pylint, pytest, pypi
 - PRM workflow to ms2 extractor
-- More I lines
+- More I lines 

@@ -1,3 +1,7 @@
+"""
+ms2_extractor defines functions for generating ms2 files from DDA and PRM based .D folders
+"""
+
 import logging
 import time
 from datetime import datetime
@@ -11,13 +15,23 @@ from serenipy.ms2 import Ms2Spectra, to_ms2
 from tqdm import tqdm
 
 from .constants import MS2_VERSION
-from .string_templates import header_ms2_template
+from .string_templates import MS2_HEADER
 from .utils import calculate_mass, map_precursor_to_ip2_scan_number
 
 logger = logging.getLogger(__name__)
 
 
 def batch_iterator(input_list: List, batch_size: int):
+    """
+    Creates an iterator that returns a batch of elements from the input list.
+
+    Args:
+        input_list (List): Input list to divide into batches.
+        batch_size (int): The number of elements in each batch.
+
+    Yields:
+        List: A batch of elements from the input list.
+    """
     for i in range(0, len(input_list), batch_size):
         yield input_list[i:i + batch_size]
 
@@ -28,9 +42,30 @@ def get_ms2_content(analysis_dir: str,
                     remove_charge1: bool = True,
                     remove_empty_spectra: bool = True,
                     min_intensity: float = 0):
+    """
+        Retrieves MS/MS content based on the TDF format
+        (Data Dependent Acquisition - DDA or Parallel Reaction Monitoring - PRM).
+
+        Args:
+            analysis_dir (str): Path to the analysis directory.
+            include_spectra (bool, optional): Whether to include the actual MS/MS spectra.
+            batch_size (int, optional): The number of precursors to process in a batch.
+            remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
+            remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
+            min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
+
+        Returns:
+            List[Ms2Spectra]: A list of Ms2Spectra objects representing MS/MS spectra.
+            or
+            None: If the TDF format is unknown.
+
+        Raises:
+            TypeError: If the TDF format is unknown.
+        """
 
     pd_tdf = PandasTdf(str(Path(analysis_dir) / 'analysis.tdf'))
     if pd_tdf.is_dda:
+        logger.info('TDF format is DDA')
         return get_ms2_dda_content(analysis_dir=analysis_dir,
                                    include_spectra=include_spectra,
                                    batch_size=batch_size,
@@ -38,14 +73,15 @@ def get_ms2_content(analysis_dir: str,
                                    remove_empty_spectra=remove_empty_spectra,
                                    min_intensity=min_intensity)
     if pd_tdf.is_prm:
+        logger.info('TDF format is PRM')
         return get_ms2_prm_content(analysis_dir=analysis_dir,
                                    include_spectra=include_spectra,
                                    batch_size=batch_size,
                                    remove_charge1=remove_charge1,
                                    remove_empty_spectra=remove_empty_spectra,
                                    min_intensity=min_intensity)
-    else:
-        raise TypeError('Unknown TDF format')
+
+    raise TypeError('Unknown TDF format')
 
 
 def get_ms2_dda_content(analysis_dir: str, include_spectra: bool = True, batch_size: int = 100,
@@ -56,11 +92,11 @@ def get_ms2_dda_content(analysis_dir: str, include_spectra: bool = True, batch_s
 
     Args:
         analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output. Defaults to True.
-        batch_size (int, optional): The number of precursors to process in a batch. Defaults to 100.
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1. Defaults to True.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values. Defaults to True.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive). Defaults to 9.
+        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output.
+        batch_size (int, optional): The number of precursors to process in a batch.
+        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
+        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
+        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
 
     Returns:
         List[Ms2Spectra]: A list of Ms2Spectra objects representing MS/MS spectra.
@@ -76,32 +112,53 @@ def get_ms2_dda_content(analysis_dir: str, include_spectra: bool = True, batch_s
         precursors_df = pd_tdf.precursors
         frames_df = pd_tdf.frames
 
+        merged_df = pd.merge(precursors_df,
+                             pd_tdf.frames,
+                             left_on='Parent',
+                             right_on='Id',
+                             suffixes=("_Precursor", "_Frame"))
+
+        pasef_frame_msms_info_df = pd_tdf.pasef_frame_msms_info.drop(['Frame'], axis=1)
+
+
+        # count the number of items in each group
+        pasef_frame_msms_info_df['count'] = \
+            pasef_frame_msms_info_df.groupby('Precursor')['Precursor'].transform('count')
+
+        # keep only the row for each group
+        pasef_frame_msms_info_df = pasef_frame_msms_info_df.drop_duplicates(subset='Precursor', keep='first')
+        assert len(pasef_frame_msms_info_df) == len(merged_df)
+
+        merged_df = pd.merge(merged_df,
+                             pasef_frame_msms_info_df,
+                             left_on='Id_Precursor',
+                             right_on='Precursor',
+                             suffixes=("_Precursor", "_PasefFrameMsmsInfo")).drop('Precursor', axis=1)
+
+        print(merged_df.columns)
+
         precursor_to_scan_number = map_precursor_to_ip2_scan_number(precursors_df, frames_df)
-        parent_id_to_rt = {int(frame_id): rt for frame_id, rt in frames_df[['Id', 'Time']].values}
-
-        precursor_id_to_msms_info = {int(prec_id): (ce, iso_width, iso_mz) for prec_id, ce, iso_width, iso_mz in
-                                     pd_tdf.pasef_frame_msms_info[
-                                         ['Precursor', 'CollisionEnergy', 'IsolationWidth', 'IsolationMz']].values}
-
-        precursors_df.dropna(subset=['MonoisotopicMz', 'Charge'], inplace=True)
+        merged_df['IP2ScanNumber'] = merged_df['Id_Precursor'].map(precursor_to_scan_number)
+        merged_df.dropna(subset=['MonoisotopicMz', 'Charge'], inplace=True)
 
         for precursor_batch in tqdm(
-                list(batch_iterator(input_list=list(precursors_df.iterrows()), batch_size=batch_size)),
+                list(batch_iterator(input_list=list(merged_df.iterrows()), batch_size=batch_size)),
                 desc='Generating MS2 Spectra'):
             pasef_ms_ms = None
             if include_spectra:
-                pasef_ms_ms = td.readPasefMsMs([int(precursor_row['Id']) for _, precursor_row in precursor_batch])
+                pasef_ms_ms = \
+                    td.readPasefMsMs([int(precursor_row['Id_Precursor']) for _, precursor_row in precursor_batch])
 
             for _, precursor_row in precursor_batch:
 
-                precursor_id = int(precursor_row['Id'])
+                precursor_id = int(precursor_row['Id_Precursor'])
                 parent_id = int(precursor_row['Parent'])
                 charge = int(precursor_row['Charge'])
 
                 if remove_charge1 is True and charge == 1:
                     continue
 
-                ip2_scan_number = precursor_to_scan_number[precursor_id]
+                ip2_scan_number = precursor_row['IP2ScanNumber']
                 ook0 = td.scanNumToOneOverK0(parent_id, [precursor_row['ScanNumber']])[0]
                 ccs = timsdata.oneOverK0ToCCSforMz(ook0, charge, precursor_row['MonoisotopicMz'])
                 mz = precursor_row['MonoisotopicMz']
@@ -123,10 +180,24 @@ def get_ms2_dda_content(analysis_dir: str, include_spectra: bool = True, batch_s
                 ms2_spectra.prec_intensity = int(prec_intensity)
                 ms2_spectra.ook0 = round(ook0, 4)
                 ms2_spectra.ccs = round(ccs, 1)
-                ms2_spectra.rt = round(parent_id_to_rt[parent_id], 2)
-                ms2_spectra.ce = round(precursor_id_to_msms_info[precursor_id][0], 1)
-                ms2_spectra.iso_width = round(precursor_id_to_msms_info[precursor_id][1], 1)
-                ms2_spectra.iso_mz = round(precursor_id_to_msms_info[precursor_id][2], 4)
+                ms2_spectra.rt = round(precursor_row['Time'], 2)
+                ms2_spectra.ce = round(precursor_row['CollisionEnergy'], 1)
+                ms2_spectra.iso_width = round(precursor_row['IsolationWidth'], 1)
+                ms2_spectra.iso_mz = round(precursor_row['IsolationMz'], 4)
+                ms2_spectra.scan_begin = round(float(precursor_row['ScanNumBegin']), 4)
+                ms2_spectra.scan_end = round(float(precursor_row['ScanNumEnd']), 4)
+                ms2_spectra.info['Accumulation_Time'] = round(float(precursor_row['AccumulationTime']), 4)
+                ms2_spectra.info['Ramp_Time'] = round(float(precursor_row['RampTime']), 4)
+                ms2_spectra.info['PASEF_Scans'] = int(precursor_row['count'])
+
+                if 'Pressure' in precursor_row:
+                    ms2_spectra.info['Pressure'] = round(float(precursor_row['Pressure']), 4)
+
+                ook0_range = td.scanNumToOneOverK0(int(precursor_row['Id_Frame']),
+                                                   [ms2_spectra.scan_begin, ms2_spectra.scan_end])
+                ms2_spectra.info['OOK0_Begin'] = round(float(ook0_range[0]), 4)
+                ms2_spectra.info['OOK0_End'] = round(float(ook0_range[1]), 4)
+
 
                 if include_spectra:
                     ms2_spectra_data = list(zip(pasef_ms_ms[precursor_id][0], pasef_ms_ms[precursor_id][1]))
@@ -153,11 +224,11 @@ def get_ms2_prm_content(analysis_dir: str, include_spectra: bool = True, batch_s
 
     Args:
         analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output. Defaults to True.
-        batch_size (int, optional): Not used with PRM extractor
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1. Defaults to True.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values. Defaults to True.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive). Defaults to 9.
+        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output.
+        batch_size (int, optional): Not used with PRM extractor. Retained for consistency.
+        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
+        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
+        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
 
     Returns:
         List[Ms2Spectra]: A list of Ms2Spectra objects representing MS/MS spectra.
@@ -241,10 +312,18 @@ def generate_header(analysis_dir: str,
     Generates a header string for MS2 data using information from the analysis file.
 
     Args:
-        analysis_dir: The directory path where the analysis file `analysis.tdf` is located.
+        analysis_dir (str): The directory path where the analysis file `analysis.tdf` is located.
+        min_intensity (float): The minimum intensity of MS/MS spectra to be considered.
+        remove_charge1 (bool): Indicates whether to exclude precursors with a charge of 1.
+        remove_empty_spectra (bool): Indicates whether to exclude MS/MS spectra with no spectra values.
+        include_spectra (bool): Indicates whether to include the actual MS/MS spectra in the output.
+        resolution (float): The resolution of the MS/MS spectra.
 
     Returns:
-        The generated header string for MS2 data.
+        str: The generated header string for MS2 data.
+
+    Raises:
+        TypeError: If the TDF format is unknown.
     """
 
     pd_tdf = PandasTdf(str(Path(analysis_dir) / 'analysis.tdf'))
@@ -265,16 +344,16 @@ def generate_header(analysis_dir: str,
     else:
         raise TypeError('Unknown TDF format')
 
-    ms2_header = header_ms2_template.format(version=MS2_VERSION,
-                                            date_of_creation=str(datetime.now().strftime("%B %d, %Y %H:%M")),
-                                            minimum_intensity=min_intensity,
-                                            remove_charge1=remove_charge1,
-                                            remove_empty_spectra=remove_empty_spectra,
-                                            include_spectra=include_spectra,
-                                            method=method,
-                                            resolution=resolution,
-                                            first_scan=first_scan,
-                                            last_scan=last_scan)
+    ms2_header = MS2_HEADER.format(version=MS2_VERSION,
+                                   date_of_creation=str(datetime.now().strftime("%B %d, %Y %H:%M")),
+                                   minimum_intensity=min_intensity,
+                                   remove_charge1=remove_charge1,
+                                   remove_empty_spectra=remove_empty_spectra,
+                                   include_spectra=include_spectra,
+                                   method=method,
+                                   resolution=resolution,
+                                   first_scan=first_scan,
+                                   last_scan=last_scan)
 
     return ms2_header
 
@@ -286,12 +365,12 @@ def write_ms2_file(analysis_dir: str, output_file: str = None, include_spectra: 
 
     Args:
         analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output. Defaults to True.
-        output_file (str, optional): The output file name. Defaults to None.
-        batch_size (int, optional): The number of precursors to process in a batch. Defaults to 1000.
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1. Defaults to True.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values. Defaults to True.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive). Defaults to 0.
+        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output.
+        output_file (str, optional): The output file name.
+        batch_size (int, optional): The number of precursors to process in a batch.
+        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
+        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
+        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
 
     Returns:
         None.
@@ -306,8 +385,8 @@ def write_ms2_file(analysis_dir: str, output_file: str = None, include_spectra: 
 
     logger.info(
         f'Arguments: analysis_dir: {analysis_dir}, output_file: {output_file}, include_spectra: {include_spectra}, '
-        f'batch_size: {batch_size}, remove_charge1: {remove_charge1}, remove_empty_spectra: {remove_empty_spectra}, '
-        f'min_intensity: {min_intensity}')
+        f'batch_size: {batch_size}, remove_charge1: {remove_charge1}, '
+        f'remove_empty_spectra: {remove_empty_spectra}, min_intensity: {min_intensity}')
 
     logger.info('Creating Ms2 Header')
     ms2_header = generate_header(analysis_dir=analysis_dir,
@@ -328,7 +407,8 @@ def write_ms2_file(analysis_dir: str, output_file: str = None, include_spectra: 
     time.sleep(1)  # Dumb fix for logging message overlap with tqdm progress bar
 
     logger.info('Writing Contents To File')
-    with open(output_file, 'w') as file:
+    with open(output_file, 'w', encoding='UTF-8') as file:
         file.write(ms2_content)
 
-    logger.info(f'Total Time: {round(time.time() - start_time, 2)} seconds')
+    total_time = round(time.time() - start_time, 2)
+    logger.info(f'Total Time: {total_time:.2f} seconds')

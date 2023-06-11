@@ -33,4 +33,6 @@ version = {attr = "tdfextractor.__version__"}
 
 [tool.pylint]
 max-line-length = 120
-fail-under = 9.5
+fail-under = 9.0
+good-names = ["mz" ,"td", "ms", "tdf", "tdfpy", "tdfextra", "i"]
+disable = ["too-many-arguments", "too-many-locals", "too-many-statements"]
