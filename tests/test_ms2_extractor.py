@@ -5,7 +5,7 @@ import os
 
 from tdfextractor.ms2_extractor import get_ms2_content, write_ms2_file
 
-d_folder = str(Path('data') / '200ngHeLaPASEF_1min.d')
+d_folder = str(Path('tests') / 'data' / '200ngHeLaPASEF_1min.d')
 
 logging.basicConfig(
     level=logging.INFO)
