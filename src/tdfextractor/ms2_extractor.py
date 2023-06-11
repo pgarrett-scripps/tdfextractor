@@ -135,8 +135,6 @@ def get_ms2_dda_content(analysis_dir: str, include_spectra: bool = True, batch_s
                              right_on='Precursor',
                              suffixes=("_Precursor", "_PasefFrameMsmsInfo")).drop('Precursor', axis=1)
 
-        print(merged_df.columns)
-
         precursor_to_scan_number = map_precursor_to_ip2_scan_number(precursors_df, frames_df)
         merged_df['IP2ScanNumber'] = merged_df['Id_Precursor'].map(precursor_to_scan_number)
         merged_df.dropna(subset=['MonoisotopicMz', 'Charge'], inplace=True)
