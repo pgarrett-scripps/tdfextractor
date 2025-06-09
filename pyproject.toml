@@ -23,6 +23,9 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 
+[project.scripts]
+mgf-extractor = "tdfextractor.mgf_exctractor:main"
+
 
 [tool.setuptools]
 package-dir = {"" = "src"}

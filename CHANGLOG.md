@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0]
+### Added
+- mgf file
+- cli
+- more args
+
 ## [0.1.3]
 ### Added
 - switched to serenipy as the backend for ms2 file creation
