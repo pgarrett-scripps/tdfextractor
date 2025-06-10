@@ -145,6 +145,8 @@ def get_ms2_dda_content(
     max_rt: Optional[float] = None,
     min_ccs: Optional[float] = None,
     max_ccs: Optional[float] = None,
+    merge_precursors: bool = True,
+    merge_tolerance: float = 5.0
 ) -> Generator[Ms2Spectra, None, None]:
 
     with timsdata.timsdata_connect(analysis_dir) as td:

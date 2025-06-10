@@ -32,6 +32,8 @@ def write_mgf_file(
     max_rt: Optional[float] = None,
     min_ccs: Optional[float] = None,
     max_ccs: Optional[float] = None,
+    merge_precursors: bool = True,
+    merge_tolerance: float = 5.0,
 ):
 
     start_time = time.time()
@@ -55,6 +57,8 @@ def write_mgf_file(
         max_rt=max_rt,
         min_ccs=min_ccs,
         max_ccs=max_ccs,
+        merge_precursors=merge_precursors,
+        merge_tolerance=merge_tolerance
     )
 
     time.sleep(1)
@@ -66,8 +70,8 @@ def write_mgf_file(
             mgf_lines.append("BEGIN IONS")
             mgf_lines.append(
                 f"TITLE={Path(analysis_dir).stem}.{spectrum.low_scan}.{spectrum.high_scan}.{spectrum.charge} "
-                f'FILE="{Path(analysis_dir).stem}", NativeID="merged={spectrum.precursor_id} frame={spectrum.parent_id} '
-                f'scanStart={spectrum.scan_begin} scanEnd={spectrum.scan_end}"'
+                f'File="{Path(analysis_dir).stem}", NativeID="merged={spectrum.precursor_id} frame={spectrum.parent_id} '
+                f'scanStart={spectrum.scan_begin} scanEnd={spectrum.scan_end} scan={spectrum.low_scan}"'
             )
             mgf_lines.append(f"RTINSECONDS={spectrum.rt}")
             mgf_lines.append(f"PEPMASS={spectrum.mass}")
@@ -76,7 +80,7 @@ def write_mgf_file(
                 mgf_lines.append(f"{mz:.5f} {int(intensity)}")
             mgf_lines.append("END IONS")
 
-            file.write("\n".join(mgf_lines) + "\n")
+            file.write("\n".join(mgf_lines) + "\n\n")
 
     total_time = round(time.time() - start_time, 2)
     logger.info(f"Total Time: {total_time:.2f} seconds")
