@@ -235,7 +235,8 @@ def apply_preset_settings(args: argparse.Namespace) -> None:
 
     if hasattr(args, "ip2") and args.ip2:
         # Set IP2 specific defaults
-        args.min_precursor_charge = 1
+        args.min_precursor_charge = 2
+        args.top_n_peaks = 500
 
     if hasattr(args, "casanovo") and args.casanovo:
         # Set Casanovo specific defaults
@@ -245,7 +246,7 @@ def apply_preset_settings(args: argparse.Namespace) -> None:
         args.min_spectra_intensity = 0.01
         args.min_spectra_mz = 50
         args.max_spectra_mz = 2500
-        args.min_precursor_charge = 1
+        args.min_precursor_charge = 2
 
 
 def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> None:
