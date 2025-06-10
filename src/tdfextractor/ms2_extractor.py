@@ -536,7 +536,7 @@ def main():
     if args.output is None:
         # output will bewithin d folder
         output_dir = None
-        output_name = Path(args.analysis_dir).stem + ".ms2"
+        output_name = None
 
     elif args.output.endswith(".ms2"):
         if len(d_folders) > 1:
