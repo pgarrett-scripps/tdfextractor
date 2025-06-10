@@ -3,20 +3,15 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 """
 
 import logging
+import os
 import time
 from pathlib import Path
-from typing import Generator, List, Optional
+from typing import Optional
 import argparse
 
-import pandas as pd
-from tdfpy import timsdata
-from tdfpy.pandas_tdf import PandasTdf
-from serenipy.ms2 import Ms2Spectra
 from tqdm import tqdm
 
-from tqdm import tqdm
-from .utils import calculate_mass, get_ms2_dda_content, map_precursor_to_ip2_scan_number
-import numpy as np
+from .utils import get_ms2_dda_content
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +178,12 @@ def main():
         help="Remove precursor peaks from MS/MS spectra",
     )
 
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing output file if it exists",
+    )
+
     args = parser.parse_args()
 
     # if casanovo update params to be: --top-n-spectra 150 --min-intensity 0.01 --min-charge 2 --max-charge 5 --min-mz 50 --max-mz 2500
@@ -218,6 +219,7 @@ def main():
     logger.info(f"  Max RT: {args.max_rt if args.max_rt else 'None'} seconds")
     logger.info(f"  Min CCS: {args.min_ccs if args.min_ccs else 'None'}")
     logger.info(f"  Max CCS: {args.max_ccs if args.max_ccs else 'None'}")
+    logger.info(f"  Overwrite Existing Output: {args.overwrite}")
     logger.info(f"  Verbose Logging: {args.verbose}")
 
     # Validate input directory
@@ -243,9 +245,36 @@ def main():
         logger.error(f"No .d folders found in: {args.analysis_dir}")
         return 1
 
-    output = args.output
-    if len(d_folders) > 1:
-        output = None
+    output_dir = None
+    output_name = None
+
+    # if output is a dir
+    if args.output is None:
+        # output will bewithin d folder
+        output_dir = None
+        output_name = Path(args.analysis_dir).stem + ".mgf"
+
+    elif args.output.endswith(".mgf"):
+        if len(d_folders) > 1:
+            raise ValueError(
+                "Output file specified but multiple .d folders found.")
+        output_dir = Path(args.output).parent
+        output_name = Path(args.output).name
+   
+    else:
+        # path is a dir
+        output_dir = Path(args.output)
+
+        # make dir if it does not exist
+        if not output_dir.exists():
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created output directory: {output_dir}")
+            except Exception as e:
+                logger.error(f"Failed to create output directory: {e}")
+                return 1
+            
+        output_name = None
 
     for d_folder in d_folders:
         if not d_folder.is_dir():
@@ -258,9 +287,21 @@ def main():
         if not (d_folder / "analysis.tdf_bin").exists():
             logger.error(f"Required file not found in {d_folder}: analysis.tdf_bin")
             return 1
+        
         logger.info(f"Processing {d_folder}...")
 
+        _output_dir = output_dir if output_dir is not None else d_folder
+        _output_name = output_name if output_name is not None else Path(d_folder).stem + ".mgf"
+
+        output = os.path.join(_output_dir, _output_name)
+        logger.info(f"Output file: {output}")
+
+        if not args.overwrite and Path(output).exists():
+            logger.warning(f"Output file {output} already exists. Skipping...")
+            continue
+
         try:
+
             write_mgf_file(
                 analysis_dir=str(d_folder),
                 output_file=output,
@@ -280,8 +321,10 @@ def main():
             )
             logger.info("MGF extraction completed successfully!")
         except Exception as e:
-            logger.error(f"Error during MGF extraction: {e}")
-
+            logger.error(f"Error during MGF extraction: {e}... skipping {d_folder}")
+        except KeyboardInterrupt:
+            logger.info("Extraction interrupted by user.")
+            return 0
 
 if __name__ == "__main__":
     exit(main())

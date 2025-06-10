@@ -3,6 +3,7 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 """
 
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,8 @@ from .constants import MS2_VERSION
 from .utils import calculate_mass, get_ms2_dda_content, map_precursor_to_ip2_scan_number
 
 logger = logging.getLogger(__name__)
-
+# make debug
+logger.setLevel(logging.DEBUG)
 
 def get_ms2_content(
     analysis_dir: str,
@@ -468,6 +470,12 @@ def main():
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
 
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing output file if it exists",
+    )
+
     args = parser.parse_args()
 
     # Set up logging
@@ -493,6 +501,7 @@ def main():
     logger.info(f"  Max RT: {args.max_rt if args.max_rt else 'None'} seconds")
     logger.info(f"  Min CCS: {args.min_ccs if args.min_ccs else 'None'}")
     logger.info(f"  Max CCS: {args.max_ccs if args.max_ccs else 'None'}")
+    logger.info(f"  Overwrite Existing Output: {args.overwrite}")
     logger.info(f"  Verbose Logging: {args.verbose}")
 
     # Validate input directory
@@ -514,13 +523,42 @@ def main():
     else:
         d_folders = list(analysis_path.glob("*.d"))
         logger.info(f"Found {len(d_folders)} .d folders in: {args.analysis_dir}")
+        logger.debug(f"Found .d folders: {d_folders}")
+
     if not d_folders:
         logger.error(f"No .d folders found in: {args.analysis_dir}")
         return 1
+    
+    output_dir = None
+    output_name = None
 
-    output = args.output
-    if len(d_folders) > 1:
-        output = None
+    # if output is a dir
+    if args.output is None:
+        # output will bewithin d folder
+        output_dir = None
+        output_name = Path(args.analysis_dir).stem + ".ms2"
+
+    elif args.output.endswith(".ms2"):
+        if len(d_folders) > 1:
+            raise ValueError(
+                "Output file specified but multiple .d folders found.")
+        output_dir = Path(args.output).parent
+        output_name = Path(args.output).name
+   
+    else:
+        # path is a dir
+        output_dir = Path(args.output)
+
+        # make dir if it does not exist
+        if not output_dir.exists():
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Created output directory: {output_dir}")
+            except Exception as e:
+                logger.error(f"Failed to create output directory: {e}")
+                return 1
+            
+        output_name = None
 
     for d_folder in d_folders:
         if not d_folder.is_dir():
@@ -533,10 +571,21 @@ def main():
         if not (d_folder / "analysis.tdf_bin").exists():
             logger.error(f"Required file not found in {d_folder}: analysis.tdf_bin")
             return 1
+        
         logger.info(f"Processing {d_folder}...")
 
+        _output_dir = output_dir if output_dir is not None else d_folder
+        _output_name = output_name if output_name is not None else Path(d_folder).stem + ".ms2"
+
+        output = os.path.join(_output_dir, _output_name)
+        logger.info(f"Output file: {output}")
+
+        if not args.overwrite and Path(output).exists():
+            logger.warning(f"Output file {output} already exists. Skipping...")
+            continue
 
         try:
+
             write_ms2_file(
                 analysis_dir=str(d_folder),
                 output_file=output,
@@ -556,8 +605,10 @@ def main():
             )
             logger.info("MS2 extraction completed successfully!")
         except Exception as e:
-            logger.error(f"Error during MS2 extraction: {e}")
-
-
+            logger.error(f"Error during Ms2 extraction: {e}... skipping {d_folder}")
+        except KeyboardInterrupt:
+            logger.info("Extraction interrupted by user.")
+            return 0
+        
 if __name__ == "__main__":
     exit(main())
