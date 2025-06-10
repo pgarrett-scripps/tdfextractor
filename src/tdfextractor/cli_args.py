@@ -144,6 +144,34 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
     parser.add_argument(
+        "--min-precursor-neutral-mass",
+        type=float,
+        default=None,
+        help="Minimum precursor neutral mass filter",
+    )
+
+    parser.add_argument(
+        "--max-precursor-neutral-mass",
+        type=float,
+        default=None,
+        help="Maximum precursor neutral mass filter",
+    )
+
+    parser.add_argument(
+        "--mz_precision",
+        type=int,
+        default=5,
+        help="Number of decimal places for m/z values (default: 4)",
+    )
+
+    parser.add_argument(
+        "--intensity_precision",
+        type=int,
+        default=0,
+        help="Number of decimal places for intensity values (default: 0)",
+    )
+
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
 
@@ -274,7 +302,15 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
     logger.info(
         f"  Max Precursor CCS: {args.max_precursor_ccs if args.max_precursor_ccs else 'None'}"
     )
+    logger.info(
+        f"  Min Precursor Neutral Mass: {args.min_precursor_neutral_mass if args.min_precursor_neutral_mass else 'None'}"
+    )
+    logger.info(
+        f"  Max Precursor Neutral Mass: {args.max_precursor_neutral_mass if args.max_precursor_neutral_mass else 'None'}"
+    )
     logger.info(f"  Overwrite Existing Output: {args.overwrite}")
+    logger.info(f"  m/z Precision: {args.mz_precision} decimal places")
+    logger.info(f"  Intensity Precision: {args.intensity_precision} decimal places")
     logger.info(f"  Verbose Logging: {args.verbose}")
 
     # Log preset-specific settings

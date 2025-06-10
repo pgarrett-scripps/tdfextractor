@@ -17,8 +17,11 @@ Extract MS2 format files (compatible with MS-GF+, Comet, etc.):
 
 ```bash
 ms2-extractor /path/to/sample.d
-ms2-extractor /path/to/sample.d --output custom_output.ms2 --min-intensity 100 --min-charge 2
-ms2-extractor /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
+
+# shorthand
+ms2-ex /path/to/sample.d
+ms2-ex /path/to/sample.d --output custom_output.ms2 --min-intensity 100 --min-charge 2
+ms2-ex /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
 ```
 
 ### MGF Extraction  
@@ -26,8 +29,10 @@ Extract MGF format files (compatible with Mascot, MaxQuant, etc.):
 
 ```bash
 mgf-extractor /path/to/sample.d
-mgf-extractor /path/to/sample.d --casanovo  # Optimized for Casanovo de novo sequencing
-mgf-extractor /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
+#shorthand
+mgf-ex
+mgf-ex /path/to/sample.d --casanovo  # Optimized for Casanovo de novo sequencing
+mgf-ex /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
 ```
 
 ## Output Options
@@ -49,66 +54,41 @@ When processing multiple .D folders, the extractors will:
 
 ## Command Line Arguments
 
-### MS2 Extractor Arguments
+Both MS2 and MGF extractors share the same arguments, with only a few format-specific options:
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `analysis_dir` | str | - | Path to the .D analysis directory or directory containing .D folders |
-| `-o, --output` | str | `<analysis_dir_name>.ms2` | Output MS2 file path or directory |
+| `-o, --output` | str | `<analysis_dir_name>.<ext>` | Output file path or directory |
 | `--remove-precursor` | flag | False | Remove precursor peaks from MS/MS spectra |
 | `--precursor-peak-width` | float | 2.0 | Width around precursor m/z to remove (Da) |
 | `--batch-size` | int | 100 | Batch size for processing spectra |
-| `--top-n-spectra` | int | None | Keep only top N most intense peaks per spectrum |
-| `--min-intensity` | float | 0.0 | Minimum intensity threshold for peaks |
-| `--min-charge` | int | None | Minimum charge state filter |
-| `--max-charge` | int | None | Maximum charge state filter |
-| `--min-mz` | float | None | Minimum m/z filter |
-| `--max-mz` | float | None | Maximum m/z filter |
-| `--min-rt` | float | None | Minimum retention time filter (seconds) |
-| `--max-rt` | float | None | Maximum retention time filter (seconds) |
-| `--min-ccs` | float | None | Minimum CCS filter |
-| `--max-ccs` | float | None | Maximum CCS filter |
+| `--top-n-peaks` | int | None | Keep only top N most intense peaks per spectrum |
+| `--min-spectra-intensity` | float | None | Minimum intensity threshold for MS/MS peaks (absolute or 0.0-1.0 for percentage) |
+| `--max-spectra-intensity` | float | None | Maximum intensity threshold for MS/MS peaks (absolute or 0.0-1.0 for percentage) |
+| `--min-spectra-mz` | float | None | Minimum m/z filter for MS/MS peaks |
+| `--max-spectra-mz` | float | None | Maximum m/z filter for MS/MS peaks |
+| `--min-precursor-intensity` | int | None | Minimum precursor intensity filter |
+| `--max-precursor-intensity` | int | None | Maximum precursor intensity filter |
+| `--min-precursor-charge` | int | None | Minimum precursor charge state filter |
+| `--max-precursor-charge` | int | None | Maximum precursor charge state filter |
+| `--min-precursor-mz` | float | None | Minimum precursor m/z filter |
+| `--max-precursor-mz` | float | None | Maximum precursor m/z filter |
+| `--min-precursor-rt` | float | None | Minimum precursor retention time filter (seconds) |
+| `--max-precursor-rt` | float | None | Maximum precursor retention time filter (seconds) |
+| `--min-precursor-ccs` | float | None | Minimum precursor CCS filter |
+| `--max-precursor-ccs` | float | None | Maximum precursor CCS filter |
+| `--min-precursor-neutral-mass` | float | None | Minimum precursor neutral mass filter |
+| `--max-precursor-neutral-mass` | float | None | Maximum precursor neutral mass filter |
+| `--mz-precision` | int | 5 | Number of decimal places for m/z values |
+| `--intensity-precision` | int | 0 | Number of decimal places for intensity values |
 | `--overwrite` | flag | False | Overwrite existing output files |
 | `-v, --verbose` | flag | False | Enable verbose logging |
 
-### MGF Extractor Arguments
+### Format-Specific Arguments
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `analysis_dir` | str | - | Path to the .D analysis directory or directory containing .D folders |
-| `-o, --output` | str | `<analysis_dir_name>.mgf` | Output MGF file path or directory |
-| `--remove-precursor` | flag | False | Remove precursor peaks from MS/MS spectra |
-| `--precursor-peak-width` | float | 2.0 | Width around precursor m/z to remove (Da) |
-| `--batch-size` | int | 100 | Batch size for processing spectra |
-| `--top-n-spectra` | int | None | Keep only top N most intense peaks per spectrum |
-| `--min-intensity` | float | 0.0 | Minimum intensity threshold for peaks |
-| `--min-charge` | int | None | Minimum charge state filter |
-| `--max-charge` | int | None | Maximum charge state filter |
-| `--min-mz` | float | None | Minimum m/z filter |
-| `--max-mz` | float | None | Maximum m/z filter |
-| `--min-rt` | float | None | Minimum retention time filter (seconds) |
-| `--max-rt` | float | None | Maximum retention time filter (seconds) |
-| `--min-ccs` | float | None | Minimum CCS filter |
-| `--max-ccs` | float | None | Maximum CCS filter |
-| `--overwrite` | flag | False | Overwrite existing output files |
-| `-v, --verbose` | flag | False | Enable verbose logging |
-| `--casanovo` | flag | False | Preset for Casanovo: enables precursor removal, top-150 peaks, min intensity 0.01, m/z 50-2500 |
+**MS2 Extractor Only:**
+- `--ip2`: Use IP2 preset settings (sets min charge to 1)
 
-## Features
-
-- **Multiple format support**: Export to MS2 and MGF formats
-- **Flexible output options**: Single files, batch processing, custom directories
-- **Flexible filtering**: Filter by charge state, m/z range, retention time, CCS, and intensity
-- **Batch processing**: Process multiple .D folders at once
-- **Precursor removal**: Option to remove precursor peaks from spectra
-- **Peak selection**: Keep only the most intense peaks per spectrum
-- **DDA and PRM support**: Works with both Data-Dependent Acquisition and Parallel Reaction Monitoring data
-- **Overwrite protection**: Prevents accidental file overwrites unless explicitly requested
-
-## Requirements
-
-- Python ≥ 3.8
-- tdfpy ≥ 0.1.7
-- serenipy ≥ 0.2.6
-- tqdm
-- pandas
+**MGF Extractor Only:**
+- `--casanovo`: Use Casanovo preset settings (enables precursor removal, top-150 peaks, min intensity 0.01, m/z range 50-2500, min charge 1)

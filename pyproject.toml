@@ -4,13 +4,13 @@ requires = ["setuptools"]
 [project]
 name = "tdfextractor"
 dynamic = ["version"]
-description = "extract ms2/mgf files from bruker d folder"
+description = "extract ms2/mgf files from bruker d folders"
 authors = [
     {name = "Patrick Garrett", email = "pgarrett@scripps.edu"},
 ]
 dependencies = [
     "tdfpy==0.1.7",
-    "serenipy==0.2.6",
+    "serenipy==0.3.0",
     "tqdm"
 ]
 classifiers = [
@@ -26,6 +26,8 @@ license = {file = "LICENSE"}
 [project.scripts]
 mgf-extractor = "tdfextractor.mgf_exctractor:main"
 ms2-extractor = "tdfextractor.ms2_extractor:main"
+mgf-ex = "tdfextractor.mgf_exctractor:main"
+ms2-ex = "tdfextractor.ms2_extractor:main"
 
 
 [tool.setuptools]

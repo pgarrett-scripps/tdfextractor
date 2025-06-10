@@ -2,6 +2,7 @@
 Utility based functions for ms2 extractor
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, Generator, List, Optional, Tuple
 
@@ -111,18 +112,14 @@ def map_precursor_to_ip2_scan_number(
     }
 
 
+def calculate_p1mass(mz: float, charge: int) -> float:
+    return calculate_mass(mz, charge) - (charge - 1) * PROTON_MASS
+
+def calculate_nmass(mz: float, charge: int) -> float:
+    return calculate_mass(mz, charge) - charge * PROTON_MASS
+
 def calculate_mass(mz: float, charge: int) -> float:
-    """
-    Calculates the mass of an ion given its m/z ratio and charge.
-
-    Args:
-        mz (float): m/z ratio of ion
-        charge (int): Charge of ion
-
-    Returns:
-        float: Calculated mass
-    """
-    return (mz * charge) - (charge - 1) * PROTON_MASS
+    return mz * charge
 
 
 def batch_iterator(input_list: List, batch_size: int):
@@ -150,6 +147,8 @@ def get_ms2_dda_content(
     max_precursor_rt: Optional[float] = None,
     min_precursor_ccs: Optional[float] = None,
     max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
     with timsdata.timsdata_connect(analysis_dir) as td:
@@ -197,22 +196,92 @@ def get_ms2_dda_content(
         )
         merged_df.dropna(subset=["MonoisotopicMz", "Charge"], inplace=True)
 
+        # add col for neutral mass
+        merged_df["NeutralMass"] = merged_df.apply(
+            lambda row: calculate_nmass(row["MonoisotopicMz"], row["Charge"]),
+            axis=1,
+        )
+        
+        initial_rows = len(merged_df)
+        logging.info(f"Initial number of precursors: {initial_rows}")
+        
+        if min_precursor_neutral_mass is not None:
+            before_filter = len(merged_df)
+            merged_df = merged_df[
+                merged_df["NeutralMass"] >= min_precursor_neutral_mass
+            ]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by min_precursor_neutral_mass >= {min_precursor_neutral_mass} (remaining: {after_filter})")
+            
+        if max_precursor_neutral_mass is not None:
+            before_filter = len(merged_df)
+            merged_df = merged_df[
+                merged_df["NeutralMass"] <= max_precursor_neutral_mass
+            ]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by max_precursor_neutral_mass <= {max_precursor_neutral_mass} (remaining: {after_filter})")
+            
         if min_precursor_charge is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["Charge"] >= min_precursor_charge]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by min_precursor_charge >= {min_precursor_charge} (remaining: {after_filter})")
+            
         if max_precursor_charge is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["Charge"] <= max_precursor_charge]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by max_precursor_charge <= {max_precursor_charge} (remaining: {after_filter})")
+            
         if min_precursor_mz is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["MonoisotopicMz"] >= min_precursor_mz]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by min_precursor_mz >= {min_precursor_mz} (remaining: {after_filter})")
+            
         if max_precursor_mz is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["MonoisotopicMz"] <= max_precursor_mz]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by max_precursor_mz <= {max_precursor_mz} (remaining: {after_filter})")
+            
         if min_precursor_rt is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["Time"] >= min_precursor_rt]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by min_precursor_rt >= {min_precursor_rt} (remaining: {after_filter})")
+            
         if max_precursor_rt is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["Time"] <= max_precursor_rt]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by max_precursor_rt <= {max_precursor_rt} (remaining: {after_filter})")
+            
         if min_precursor_intensity is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["Intensity"] >= min_precursor_intensity]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by min_precursor_intensity >= {min_precursor_intensity} (remaining: {after_filter})")
+            
         if max_precursor_intensity is not None:
+            before_filter = len(merged_df)
             merged_df = merged_df[merged_df["Intensity"] <= max_precursor_intensity]
+            after_filter = len(merged_df)
+            filtered_count = before_filter - after_filter
+            logging.info(f"Filtered {filtered_count} precursors by max_precursor_intensity <= {max_precursor_intensity} (remaining: {after_filter})")
+
+        final_rows = len(merged_df)
+        total_filtered = initial_rows - final_rows
+        logging.info(f"Total precursors filtered: {total_filtered} ({(total_filtered/initial_rows)*100:.1f}%), Final count: {final_rows}")
 
         for precursor_batch in tqdm(
             list(
@@ -251,7 +320,7 @@ def get_ms2_dda_content(
 
                 mz = precursor_row["MonoisotopicMz"]
                 prec_intensity = precursor_row["Intensity"]
-                mass = calculate_mass(mz, charge)
+                mass = calculate_p1mass(mz, charge)
 
                 ms2_spectra = Ms2Spectra(
                     low_scan=ip2_scan_number,

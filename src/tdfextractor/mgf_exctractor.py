@@ -5,6 +5,8 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 import logging
 import os
 import time
+import threading
+import queue
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +39,10 @@ def write_mgf_file(
     max_precursor_rt: Optional[float] = None,
     min_precursor_ccs: Optional[float] = None,
     max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
+    mz_precision: int = 5,
+    intensity_precision: int = 0,
 ):
 
     start_time = time.time()
@@ -44,49 +50,76 @@ def write_mgf_file(
     if output_file is None:
         output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mgf"
 
-    logger.info("Generating Ms2 Spectra")
-    ms2_spectra = get_ms2_dda_content(
-        analysis_dir=analysis_dir,
-        remove_precursor=remove_precursor,
-        precursor_peak_width=precursor_peak_width,
-        batch_size=batch_size,
-        top_n_peaks=top_n_peaks,
-        min_spectra_intensity=min_spectra_intensity,
-        max_spectra_intensity=max_spectra_intensity,
-        min_spectra_mz=min_spectra_mz,
-        max_spectra_mz=max_spectra_mz,
-        min_precursor_intensity=min_precursor_intensity,
-        max_precursor_intensity=max_precursor_intensity,
-        min_precursor_charge=min_precursor_charge,
-        max_precursor_charge=max_precursor_charge,
-        min_precursor_mz=min_precursor_mz,
-        max_precursor_mz=max_precursor_mz,
-        min_precursor_rt=min_precursor_rt,
-        max_precursor_rt=max_precursor_rt,
-        min_precursor_ccs=min_precursor_ccs,
-        max_precursor_ccs=max_precursor_ccs,
-    )
+    logger.info("Generating Ms2 Spectra (producer-consumer mode)")
+    spectra_queue = queue.Queue(maxsize=100)
 
-    time.sleep(1)
-
-    logger.info("Writing Contents To File")
-    with open(output_file, "w", encoding="UTF-8") as file:
-        for spectrum in tqdm(ms2_spectra, desc="Writing MGF File"):
-            mgf_lines = []
-            mgf_lines.append("BEGIN IONS")
-            mgf_lines.append(
-                f"TITLE={Path(analysis_dir).stem}.{spectrum.low_scan}.{spectrum.high_scan}.{spectrum.charge} "
-                f'File="{Path(analysis_dir).stem}", NativeID="merged={spectrum.precursor_id} frame={spectrum.parent_id} '
-                f'scanStart={spectrum.scan_begin} scanEnd={spectrum.scan_end} scan={spectrum.low_scan}"'
+    def producer():
+        try:
+            ms2_spectra = get_ms2_dda_content(
+                analysis_dir=analysis_dir,
+                remove_precursor=remove_precursor,
+                precursor_peak_width=precursor_peak_width,
+                batch_size=batch_size,
+                top_n_peaks=top_n_peaks,
+                min_spectra_intensity=min_spectra_intensity,
+                max_spectra_intensity=max_spectra_intensity,
+                min_spectra_mz=min_spectra_mz,
+                max_spectra_mz=max_spectra_mz,
+                min_precursor_intensity=min_precursor_intensity,
+                max_precursor_intensity=max_precursor_intensity,
+                min_precursor_charge=min_precursor_charge,
+                max_precursor_charge=max_precursor_charge,
+                min_precursor_mz=min_precursor_mz,
+                max_precursor_mz=max_precursor_mz,
+                min_precursor_rt=min_precursor_rt,
+                max_precursor_rt=max_precursor_rt,
+                min_precursor_ccs=min_precursor_ccs,
+                max_precursor_ccs=max_precursor_ccs,
+                min_precursor_neutral_mass=min_precursor_neutral_mass,
+                max_precursor_neutral_mass=max_precursor_neutral_mass,
             )
-            mgf_lines.append(f"RTINSECONDS={spectrum.rt}")
-            mgf_lines.append(f"PEPMASS={spectrum.mass}")
-            mgf_lines.append(f"CHARGE={spectrum.charge}+")
-            for mz, intensity in zip(spectrum.mz_spectra, spectrum.intensity_spectra):
-                mgf_lines.append(f"{mz:.5f} {int(intensity)}")
-            mgf_lines.append("END IONS")
+            for spectrum in ms2_spectra:
+                spectra_queue.put(spectrum)
+        finally:
+            spectra_queue.put(None)  # Sentinel value
 
-            file.write("\n".join(mgf_lines) + "\n\n")
+    def consumer():
+        logger.info("Writing Contents To File")
+        with open(output_file, "w", encoding="UTF-8") as file:
+            with tqdm(desc="Writing MGF File", unit="spectra") as pbar:
+                # https://www.matrixscience.com/help/data_file_help.html
+                header_lines = []
+                header_lines.append(f"INSTRUMENT=TimsTOF")
+                header_lines.append(f"MASS=Mono")
+
+                while True:
+                    spectrum = spectra_queue.get()
+                    if spectrum is None:
+                        break
+                    mgf_lines = []
+                    mgf_lines.append("BEGIN IONS")
+                    mgf_lines.append(
+                        f"TITLE={Path(analysis_dir).stem}.{spectrum.low_scan}.{spectrum.high_scan}.{spectrum.charge} "
+                        f'File="{Path(analysis_dir).stem}", NativeID="merged={spectrum.precursor_id} frame={spectrum.parent_id} '
+                        f'scanStart={spectrum.scan_begin} scanEnd={spectrum.scan_end} scan={spectrum.low_scan}"'
+                    )
+                    mgf_lines.append(f"RTINSECONDS={spectrum.rt:.2f}")                    
+                    # Pepmass is actually mz? huh?
+                    mgf_lines.append(f"PEPMASS={spectrum.mz:.6f} {spectrum.prec_intensity:.{intensity_precision}f}")
+                    mgf_lines.append(f"CHARGE={spectrum.charge}+")
+                    for mz, intensity in zip(spectrum.mz_spectra, spectrum.intensity_spectra):
+                        mgf_lines.append(f"{mz:.{mz_precision}f} {intensity:.{intensity_precision}f}")
+                    mgf_lines.append("END IONS")
+                    file.write("\n".join(mgf_lines) + "\n\n")
+                    pbar.update(1)
+
+    producer_thread = threading.Thread(target=producer)
+    consumer_thread = threading.Thread(target=consumer)
+
+    producer_thread.start()
+    consumer_thread.start()
+    producer_thread.join()
+    consumer_thread.join()
 
     total_time = round(time.time() - start_time, 2)
     logger.info(f"Total Time: {total_time:.2f} seconds")
@@ -213,6 +246,8 @@ def main():
                 max_precursor_rt=args.max_precursor_rt,
                 min_precursor_ccs=args.min_precursor_ccs,
                 max_precursor_ccs=args.max_precursor_ccs,
+                min_precursor_neutral_mass=args.min_precursor_neutral_mass,
+                max_precursor_neutral_mass=args.max_precursor_neutral_mass,
             )
             logger.info("MGF extraction completed successfully!")
         except Exception as e:

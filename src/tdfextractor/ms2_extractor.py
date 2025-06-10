@@ -8,6 +8,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Generator, Optional
+import threading
+import queue
 
 import pandas as pd
 from tdfpy import timsdata
@@ -16,7 +18,7 @@ from serenipy.ms2 import Ms2Spectra, to_ms2
 from tqdm import tqdm
 
 from .constants import MS2_VERSION
-from .utils import calculate_mass, get_ms2_dda_content, map_precursor_to_ip2_scan_number
+from .utils import calculate_p1mass, get_ms2_dda_content, map_precursor_to_ip2_scan_number
 from .cli_args import create_ms2_parser, apply_preset_settings, log_common_args
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,8 @@ def get_ms2_content(
     max_precursor_rt: Optional[float] = None,
     min_precursor_ccs: Optional[float] = None,
     max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
     pd_tdf = PandasTdf(str(Path(analysis_dir) / "analysis.tdf"))
@@ -69,6 +73,8 @@ def get_ms2_content(
             max_precursor_rt=max_precursor_rt,
             min_precursor_ccs=min_precursor_ccs,
             max_precursor_ccs=max_precursor_ccs,
+            min_precursor_neutral_mass=min_precursor_neutral_mass,
+            max_precursor_neutral_mass=max_precursor_neutral_mass,
         )
     if pd_tdf.is_prm:
         logger.info("TDF format is PRM")
@@ -87,6 +93,8 @@ def get_ms2_content(
             max_precursor_rt=max_precursor_rt,
             min_precursor_ccs=min_precursor_ccs,
             max_precursor_ccs=max_precursor_ccs,
+            min_precursor_neutral_mass=min_precursor_neutral_mass,
+            max_precursor_neutral_mass=max_precursor_neutral_mass,
         )
 
     raise TypeError("Unknown TDF format")
@@ -107,6 +115,8 @@ def get_ms2_prm_content(
     max_precursor_rt: Optional[float] = None,
     min_precursor_ccs: Optional[float] = None,
     max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
     with timsdata.timsdata_connect(analysis_dir) as td:
@@ -175,7 +185,7 @@ def get_ms2_prm_content(
                 low_scan=int(row["Frame"]),
                 high_scan=int(row["Frame"]),
                 mz=float(row["IsolationMz"]),
-                mass=calculate_mass(float(row["IsolationMz"]), int(row["Charge"])),
+                mass=calculate_p1mass(float(row["IsolationMz"]), int(row["Charge"])),
                 charge=int(row["Charge"]),
                 info={
                     "Target": str(int(row["Target"])),
@@ -268,6 +278,10 @@ def generate_header(
     max_precursor_rt: Optional[float] = None,
     min_precursor_ccs: Optional[float] = None,
     max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
+    mz_precision: int = 5,
+    intensity_precision: int = 0,
     resolution: float = 120000,
 ):
     """
@@ -334,12 +348,16 @@ def generate_header(
         "H\tMaxPrecursorRt\t{max_precursor_rt}\n"
         "H\tMinPrecursorCcs\t{min_precursor_ccs}\n"
         "H\tMaxPrecursorCcs\t{max_precursor_ccs}\n"
+        "H\tMinPrecursorNeutralMass\t{min_precursor_neutral_mass}\n"
+        "H\tMaxPrecursorNeutralMass\t{max_precursor_neutral_mass}\n"
         "H\tExtractorOptions\tMSn\n"
         "H\tAcquisitionMethod\t{method}\n"
         "H\tInstrumentType\tTIMSTOF\n"
         "H\tDataType\tCentroid\n"
         "H\tScanType\tMS2\n"
         "H\tResolution\t{resolution}\n"
+        "H\tMzPrecision\t{mz_precision}\n"
+        "H\tIntensityPrecision\t{intensity_precision}\n"
         "H\tIsolationWindow\n"
         "H\tFirstScan\t{first_scan:d}\n"
         "H\tLastScan\t{last_scan:d}\n"
@@ -383,8 +401,20 @@ def generate_header(
         max_precursor_ccs=(
             max_precursor_ccs if max_precursor_ccs is not None else "None"
         ),
+        min_precursor_neutral_mass=(
+            min_precursor_neutral_mass
+            if min_precursor_neutral_mass is not None
+            else "None"
+        ),
+        max_precursor_neutral_mass=(
+            max_precursor_neutral_mass
+            if max_precursor_neutral_mass is not None
+            else "None"
+        ),
         method=method,
         resolution=resolution,
+        mz_precision=mz_precision,
+        intensity_precision=intensity_precision,
         first_scan=first_scan,
         last_scan=last_scan,
     )
@@ -413,7 +443,14 @@ def write_ms2_file(
     max_precursor_rt: Optional[float] = None,
     min_precursor_ccs: Optional[float] = None,
     max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
+    mz_precision: int = 5,
+    intensity_precision: int = 0,
+    resolution: float = 120000,
 ):
+    import queue
+    import threading
 
     start_time = time.time()
 
@@ -441,40 +478,66 @@ def write_ms2_file(
         max_precursor_rt=max_precursor_rt,
         min_precursor_ccs=min_precursor_ccs,
         max_precursor_ccs=max_precursor_ccs,
-        resolution=120000,
+        min_precursor_neutral_mass=min_precursor_neutral_mass,
+        max_precursor_neutral_mass=max_precursor_neutral_mass,
+        mz_precision=mz_precision,
+        intensity_precision=intensity_precision,
+        resolution=resolution,
     )
 
-    logger.info("Generating Ms2 Spectra")
-    ms2_spectra = get_ms2_content(
-        analysis_dir=analysis_dir,
-        remove_precursor=remove_precursor,
-        precursor_peak_width=precursor_peak_width,
-        batch_size=batch_size,
-        top_n_peaks=top_n_peaks,
-        min_spectra_intensity=min_spectra_intensity,
-        max_spectra_intensity=max_spectra_intensity,
-        min_spectra_mz=min_spectra_mz,
-        max_spectra_mz=max_spectra_mz,
-        min_precursor_intensity=min_precursor_intensity,
-        max_precursor_intensity=max_precursor_intensity,
-        min_precursor_charge=min_precursor_charge,
-        max_precursor_charge=max_precursor_charge,
-        min_precursor_mz=min_precursor_mz,
-        max_precursor_mz=max_precursor_mz,
-        min_precursor_rt=min_precursor_rt,
-        max_precursor_rt=max_precursor_rt,
-        min_precursor_ccs=min_precursor_ccs,
-        max_precursor_ccs=max_precursor_ccs,
-    )
+    logger.info("Generating Ms2 Spectra (producer-consumer mode)")
+    spectra_queue = queue.Queue(maxsize=100)
 
-    logger.info("Creating MS2 Contents")
-    ms2_content = to_ms2([ms2_header], ms2_spectra)
+    def producer():
+        try:
+            for ms2_spectra in get_ms2_content(
+                analysis_dir=analysis_dir,
+                remove_precursor=remove_precursor,
+                precursor_peak_width=precursor_peak_width,
+                batch_size=batch_size,
+                top_n_peaks=top_n_peaks,
+                min_spectra_intensity=min_spectra_intensity,
+                max_spectra_intensity=max_spectra_intensity,
+                min_spectra_mz=min_spectra_mz,
+                max_spectra_mz=max_spectra_mz,
+                min_precursor_intensity=min_precursor_intensity,
+                max_precursor_intensity=max_precursor_intensity,
+                min_precursor_charge=min_precursor_charge,
+                max_precursor_charge=max_precursor_charge,
+                min_precursor_mz=min_precursor_mz,
+                max_precursor_mz=max_precursor_mz,
+                min_precursor_rt=min_precursor_rt,
+                max_precursor_rt=max_precursor_rt,
+                min_precursor_ccs=min_precursor_ccs,
+                max_precursor_ccs=max_precursor_ccs,
+                min_precursor_neutral_mass=min_precursor_neutral_mass,
+                max_precursor_neutral_mass=max_precursor_neutral_mass,
+            ):
+                spectra_queue.put(ms2_spectra)
+        finally:
+            spectra_queue.put(None)  # Sentinel value
 
-    time.sleep(1)  # Dumb fix for logging message overlap with tqdm progress bar
+    def consumer():
+        with open(output_file, "w", encoding="UTF-8") as file:
+            file.write(ms2_header)
+            with tqdm(desc="Writing MS2 Spectra", unit="spectra") as pbar:
+                while True:
+                    ms2_spectra = spectra_queue.get()
+                    if ms2_spectra is None:
+                        break
+                    file.write(ms2_spectra.serialize(
+                        mz_precision=mz_precision,
+                        intensity_precision=intensity_precision,
+                    ))
+                    pbar.update(1)
 
-    logger.info("Writing Contents To File")
-    with open(output_file, "w", encoding="UTF-8") as file:
-        file.write(ms2_content)
+    producer_thread = threading.Thread(target=producer)
+    consumer_thread = threading.Thread(target=consumer)
+
+    producer_thread.start()
+    consumer_thread.start()
+    producer_thread.join()
+    consumer_thread.join()
 
     total_time = round(time.time() - start_time, 2)
     logger.info(f"Total Time: {total_time:.2f} seconds")
@@ -603,6 +666,8 @@ def main():
                 max_precursor_rt=args.max_precursor_rt,
                 min_precursor_ccs=args.min_precursor_ccs,
                 max_precursor_ccs=args.max_precursor_ccs,
+                min_precursor_neutral_mass=args.min_precursor_neutral_mass,
+                max_precursor_neutral_mass=args.max_precursor_neutral_mass,
             )
             logger.info("MS2 extraction completed successfully!")
         except Exception as e:
