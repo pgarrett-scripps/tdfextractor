@@ -507,11 +507,13 @@ def main():
 
     d_folders = []
 
-    # check if it ends in .d else look for all .d directories
+   # check if it ends in .d else look for all .d directories
     if analysis_path.name.endswith(".d"):
         d_folders.append(analysis_path)
+        logger.info(f"Using provided .d folder: {analysis_path}")
     else:
         d_folders = list(analysis_path.glob("*.d"))
+        logger.info(f"Found {len(d_folders)} .d folders in: {args.analysis_dir}")
     if not d_folders:
         logger.error(f"No .d folders found in: {args.analysis_dir}")
         return 1
@@ -533,6 +535,7 @@ def main():
             return 1
         logger.info(f"Processing {d_folder}...")
 
+
         try:
             write_ms2_file(
                 analysis_dir=str(d_folder),
@@ -552,10 +555,8 @@ def main():
                 max_ccs=args.max_ccs,
             )
             logger.info("MS2 extraction completed successfully!")
-            return 0
         except Exception as e:
             logger.error(f"Error during MS2 extraction: {e}")
-            return 1
 
 
 if __name__ == "__main__":
