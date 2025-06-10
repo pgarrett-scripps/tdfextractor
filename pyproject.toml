@@ -4,7 +4,7 @@ requires = ["setuptools"]
 [project]
 name = "tdfextractor"
 dynamic = ["version"]
-description = "extract ms2 files from bruker d folder"
+description = "extract ms2/mgf files from bruker d folder"
 authors = [
     {name = "Patrick Garrett", email = "pgarrett@scripps.edu"},
 ]

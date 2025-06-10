@@ -135,18 +135,21 @@ def get_ms2_dda_content(
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_spectra: Optional[int] = None,
-    min_intensity: float = 0.0,
-    min_charge: Optional[int] = None,
-    max_charge: Optional[int] = None,
-    min_mz: Optional[float] = None,
-    max_mz: Optional[float] = None,
-    min_rt: Optional[float] = None,
-    max_rt: Optional[float] = None,
-    min_ccs: Optional[float] = None,
-    max_ccs: Optional[float] = None,
-    merge_precursors: bool = True,
-    merge_tolerance: float = 5.0
+    top_n_peaks: Optional[int] = None,
+    min_spectra_intensity: Optional[float] = None,
+    max_spectra_intensity: Optional[float] = None,
+    min_spectra_mz: Optional[float] = None,
+    max_spectra_mz: Optional[float] = None,
+    min_precursor_intensity: Optional[int] = None,
+    max_precursor_intensity: Optional[int] = None,
+    min_precursor_charge: Optional[int] = None,
+    max_precursor_charge: Optional[int] = None,
+    min_precursor_mz: Optional[float] = None,
+    max_precursor_mz: Optional[float] = None,
+    min_precursor_rt: Optional[float] = None,
+    max_precursor_rt: Optional[float] = None,
+    min_precursor_ccs: Optional[float] = None,
+    max_precursor_ccs: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
     with timsdata.timsdata_connect(analysis_dir) as td:
@@ -194,18 +197,22 @@ def get_ms2_dda_content(
         )
         merged_df.dropna(subset=["MonoisotopicMz", "Charge"], inplace=True)
 
-        if min_charge is not None:
-            merged_df = merged_df[merged_df["Charge"] >= min_charge]
-        if max_charge is not None:
-            merged_df = merged_df[merged_df["Charge"] <= max_charge]
-        if min_mz is not None:
-            merged_df = merged_df[merged_df["MonoisotopicMz"] >= min_mz]
-        if max_mz is not None:
-            merged_df = merged_df[merged_df["MonoisotopicMz"] <= max_mz]
-        if min_rt is not None:
-            merged_df = merged_df[merged_df["Time"] >= min_rt]
-        if max_rt is not None:
-            merged_df = merged_df[merged_df["Time"] <= max_rt]
+        if min_precursor_charge is not None:
+            merged_df = merged_df[merged_df["Charge"] >= min_precursor_charge]
+        if max_precursor_charge is not None:
+            merged_df = merged_df[merged_df["Charge"] <= max_precursor_charge]
+        if min_precursor_mz is not None:
+            merged_df = merged_df[merged_df["MonoisotopicMz"] >= min_precursor_mz]
+        if max_precursor_mz is not None:
+            merged_df = merged_df[merged_df["MonoisotopicMz"] <= max_precursor_mz]
+        if min_precursor_rt is not None:
+            merged_df = merged_df[merged_df["Time"] >= min_precursor_rt]
+        if max_precursor_rt is not None:
+            merged_df = merged_df[merged_df["Time"] <= max_precursor_rt]
+        if min_precursor_intensity is not None:
+            merged_df = merged_df[merged_df["Intensity"] >= min_precursor_intensity]
+        if max_precursor_intensity is not None:
+            merged_df = merged_df[merged_df["Intensity"] <= max_precursor_intensity]
 
         for precursor_batch in tqdm(
             list(
@@ -237,9 +244,9 @@ def get_ms2_dda_content(
                     ook0, charge, precursor_row["MonoisotopicMz"]
                 )
 
-                if min_ccs is not None and ccs < min_ccs:
+                if min_precursor_ccs is not None and ccs < min_precursor_ccs:
                     continue
-                if max_ccs is not None and ccs > max_ccs:
+                if max_precursor_ccs is not None and ccs > max_precursor_ccs:
                     continue
 
                 mz = precursor_row["MonoisotopicMz"]
@@ -301,10 +308,60 @@ def get_ms2_dda_content(
                 intensity_array = np.array([data[1] for data in ms2_spectra_data])
 
                 # Apply min_intensity filter
-                if min_intensity != 0:
-                    intensity_mask = intensity_array >= min_intensity
+                if min_spectra_intensity is not None:
+
+                    if (
+                        isinstance(min_spectra_intensity, float)
+                        and 0.0 <= min_spectra_intensity <= 1.0
+                    ):
+                        # Convert percentage to absolute intensity
+                        _min_intensity = max(intensity_array) * min_spectra_intensity
+                    elif (
+                        isinstance(min_spectra_intensity, (float, int))
+                        and min_spectra_intensity > 1.0
+                    ):
+                        _min_intensity = min_spectra_intensity
+
+                    intensity_mask = intensity_array >= _min_intensity
                     mz_array = mz_array[intensity_mask]
                     intensity_array = intensity_array[intensity_mask]
+
+                    if len(mz_array) == 0:
+                        continue
+
+                # Apply max_intensity filter
+                if max_spectra_intensity is not None:
+                    if (
+                        isinstance(max_spectra_intensity, float)
+                        and 0.0 <= max_spectra_intensity <= 1.0
+                    ):
+                        # Convert percentage to absolute intensity
+                        _max_intensity = max(intensity_array) * max_spectra_intensity
+                    elif (
+                        isinstance(max_spectra_intensity, (float, int))
+                        and max_spectra_intensity > 1.0
+                    ):
+                        _max_intensity = max_spectra_intensity
+
+                    intensity_mask = intensity_array <= _max_intensity
+                    mz_array = mz_array[intensity_mask]
+                    intensity_array = intensity_array[intensity_mask]
+
+                    if len(mz_array) == 0:
+                        continue
+
+                if min_spectra_mz is not None:
+                    mz_mask = mz_array >= min_spectra_mz
+                    mz_array = mz_array[mz_mask]
+                    intensity_array = intensity_array[mz_mask]
+
+                    if len(mz_array) == 0:
+                        continue
+
+                if max_spectra_mz is not None:
+                    mz_mask = mz_array <= max_spectra_mz
+                    mz_array = mz_array[mz_mask]
+                    intensity_array = intensity_array[mz_mask]
 
                     if len(mz_array) == 0:
                         continue
@@ -313,10 +370,10 @@ def get_ms2_dda_content(
                     # Remove precursor peak from MS/MS spectra
                     precursor_mz = ms2_spectra.mz
                     min_prec_mz = precursor_mz - precursor_peak_width
-                    max_prec_mz = precursor_mz + precursor_peak_width
+                    max_precursor_mz = precursor_mz + precursor_peak_width
 
                     precursor_mask = ~(
-                        (mz_array >= min_prec_mz) & (mz_array <= max_prec_mz)
+                        (mz_array >= min_prec_mz) & (mz_array <= max_precursor_mz)
                     )
                     mz_array = mz_array[precursor_mask]
                     intensity_array = intensity_array[precursor_mask]
@@ -324,10 +381,10 @@ def get_ms2_dda_content(
                     if len(mz_array) == 0:
                         continue
 
-                if top_n_spectra is not None and len(intensity_array) > top_n_spectra:
+                if top_n_peaks is not None and len(intensity_array) > top_n_peaks:
                     # Get indices of top N intensities
-                    top_indices = np.argpartition(intensity_array, -top_n_spectra)[
-                        -top_n_spectra:
+                    top_indices = np.argpartition(intensity_array, -top_n_peaks)[
+                        -top_n_peaks:
                     ]
                     mz_array = mz_array[top_indices]
                     intensity_array = intensity_array[top_indices]
