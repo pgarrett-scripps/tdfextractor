@@ -7,6 +7,10 @@ All notable changes to this project will be documented in this file.
 - mgf file
 - cli
 - more args
+- readme
+- updated ms2 args
+- rm linting action
+- formatted with black
 
 ## [0.1.3]
 ### Added

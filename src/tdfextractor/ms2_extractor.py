@@ -6,7 +6,8 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Generator, Optional
+import argparse
 
 import pandas as pd
 from tdfpy import timsdata
@@ -15,286 +16,86 @@ from serenipy.ms2 import Ms2Spectra, to_ms2
 from tqdm import tqdm
 
 from .constants import MS2_VERSION
-from .string_templates import MS2_HEADER
-from .utils import calculate_mass, map_precursor_to_ip2_scan_number
+from .utils import calculate_mass, get_ms2_dda_content, map_precursor_to_ip2_scan_number
 
 logger = logging.getLogger(__name__)
 
 
-def batch_iterator(input_list: List, batch_size: int):
-    """
-    Creates an iterator that returns a batch of elements from the input list.
-
-    Args:
-        input_list (List): Input list to divide into batches.
-        batch_size (int): The number of elements in each batch.
-
-    Yields:
-        List: A batch of elements from the input list.
-    """
-    for i in range(0, len(input_list), batch_size):
-        yield input_list[i : i + batch_size]
-
-
 def get_ms2_content(
     analysis_dir: str,
-    include_spectra: bool = True,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    remove_charge1: bool = True,
-    remove_empty_spectra: bool = True,
-    min_intensity: float = 0,
-):
-    """
-    Retrieves MS/MS content based on the TDF format
-    (Data Dependent Acquisition - DDA or Parallel Reaction Monitoring - PRM).
-
-    Args:
-        analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra.
-        batch_size (int, optional): The number of precursors to process in a batch.
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
-
-    Returns:
-        List[Ms2Spectra]: A list of Ms2Spectra objects representing MS/MS spectra.
-        or
-        None: If the TDF format is unknown.
-
-    Raises:
-        TypeError: If the TDF format is unknown.
-    """
+    top_n_spectra: Optional[int] = None,
+    min_intensity: float = 0.0,
+    min_charge: Optional[int] = None,
+    max_charge: Optional[int] = None,
+    min_mz: Optional[float] = None,
+    max_mz: Optional[float] = None,
+    min_rt: Optional[float] = None,
+    max_rt: Optional[float] = None,
+    min_ccs: Optional[float] = None,
+    max_ccs: Optional[float] = None,
+) -> Generator[Ms2Spectra, None, None]:
 
     pd_tdf = PandasTdf(str(Path(analysis_dir) / "analysis.tdf"))
     if pd_tdf.is_dda:
         logger.info("TDF format is DDA")
         return get_ms2_dda_content(
             analysis_dir=analysis_dir,
-            include_spectra=include_spectra,
+            remove_precursor=remove_precursor,
+            precursor_peak_width=precursor_peak_width,
             batch_size=batch_size,
-            remove_charge1=remove_charge1,
-            remove_empty_spectra=remove_empty_spectra,
+            top_n_spectra=top_n_spectra,
             min_intensity=min_intensity,
+            min_charge=min_charge,
+            max_charge=max_charge,
+            min_mz=min_mz,
+            max_mz=max_mz,
+            min_rt=min_rt,
+            max_rt=max_rt,
+            min_ccs=min_ccs,
+            max_ccs=max_ccs,
         )
     if pd_tdf.is_prm:
         logger.info("TDF format is PRM")
         return get_ms2_prm_content(
             analysis_dir=analysis_dir,
-            include_spectra=include_spectra,
+            remove_precursor=remove_precursor,
+            precursor_peak_width=precursor_peak_width,
             batch_size=batch_size,
-            remove_charge1=remove_charge1,
-            remove_empty_spectra=remove_empty_spectra,
+            top_n_spectra=top_n_spectra,
             min_intensity=min_intensity,
+            min_charge=min_charge,
+            max_charge=max_charge,
+            min_mz=min_mz,
+            max_mz=max_mz,
+            min_rt=min_rt,
+            max_rt=max_rt,
+            min_ccs=min_ccs,
+            max_ccs=max_ccs,
         )
 
     raise TypeError("Unknown TDF format")
 
 
-def get_ms2_dda_content(
-    analysis_dir: str,
-    include_spectra: bool = True,
-    batch_size: int = 100,
-    remove_charge1: bool = True,
-    remove_empty_spectra: bool = True,
-    min_intensity: float = 0,
-):
-    """
-    Retrieves MS/MS spectra from a given analysis directory.
-
-    Args:
-        analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output.
-        batch_size (int, optional): The number of precursors to process in a batch.
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
-
-    Returns:
-        List[Ms2Spectra]: A list of Ms2Spectra objects representing MS/MS spectra.
-
-    Raises:
-        FileNotFoundError: If the analysis directory does not exist.
-    """
-    with timsdata.timsdata_connect(analysis_dir) as td:
-
-        analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
-        pd_tdf = PandasTdf(analysis_tdf_path)
-
-        precursors_df = pd_tdf.precursors
-        frames_df = pd_tdf.frames
-
-        merged_df = pd.merge(
-            precursors_df,
-            pd_tdf.frames,
-            left_on="Parent",
-            right_on="Id",
-            suffixes=("_Precursor", "_Frame"),
-        )
-
-        pasef_frame_msms_info_df = pd_tdf.pasef_frame_msms_info.drop(["Frame"], axis=1)
-
-        # count the number of items in each group
-        pasef_frame_msms_info_df["count"] = pasef_frame_msms_info_df.groupby(
-            "Precursor"
-        )["Precursor"].transform("count")
-
-        # keep only the row for each group
-        pasef_frame_msms_info_df = pasef_frame_msms_info_df.drop_duplicates(
-            subset="Precursor", keep="first"
-        )
-        assert len(pasef_frame_msms_info_df) == len(merged_df)
-
-        merged_df = pd.merge(
-            merged_df,
-            pasef_frame_msms_info_df,
-            left_on="Id_Precursor",
-            right_on="Precursor",
-            suffixes=("_Precursor", "_PasefFrameMsmsInfo"),
-        ).drop("Precursor", axis=1)
-
-        precursor_to_scan_number = map_precursor_to_ip2_scan_number(
-            precursors_df, frames_df
-        )
-        merged_df["IP2ScanNumber"] = merged_df["Id_Precursor"].map(
-            precursor_to_scan_number
-        )
-        merged_df.dropna(subset=["MonoisotopicMz", "Charge"], inplace=True)
-
-        for precursor_batch in tqdm(
-            list(
-                batch_iterator(
-                    input_list=list(merged_df.iterrows()), batch_size=batch_size
-                )
-            ),
-            desc="Generating MS2 Spectra",
-        ):
-            pasef_ms_ms = None
-            if include_spectra:
-                pasef_ms_ms = td.readPasefMsMs(
-                    [
-                        int(precursor_row["Id_Precursor"])
-                        for _, precursor_row in precursor_batch
-                    ]
-                )
-
-            for _, precursor_row in precursor_batch:
-
-                precursor_id = int(precursor_row["Id_Precursor"])
-                parent_id = int(precursor_row["Parent"])
-                charge = int(precursor_row["Charge"])
-
-                if remove_charge1 is True and charge == 1:
-                    continue
-
-                ip2_scan_number = precursor_row["IP2ScanNumber"]
-                ook0 = td.scanNumToOneOverK0(parent_id, [precursor_row["ScanNumber"]])[
-                    0
-                ]
-                ccs = timsdata.oneOverK0ToCCSforMz(
-                    ook0, charge, precursor_row["MonoisotopicMz"]
-                )
-                mz = precursor_row["MonoisotopicMz"]
-                prec_intensity = precursor_row["Intensity"]
-                mass = calculate_mass(mz, charge)
-
-                ms2_spectra = Ms2Spectra(
-                    low_scan=ip2_scan_number,
-                    high_scan=ip2_scan_number,
-                    mz=mz,
-                    mass=mass,
-                    charge=charge,
-                    info={},
-                    mz_spectra=[],
-                    intensity_spectra=[],
-                    charge_spectra=[],
-                )
-
-                ms2_spectra.parent_id = parent_id
-                ms2_spectra.precursor_id = precursor_id
-                ms2_spectra.prec_intensity = int(prec_intensity)
-                ms2_spectra.ook0 = round(ook0, 4)
-                ms2_spectra.ccs = round(ccs, 1)
-                ms2_spectra.rt = round(precursor_row["Time"], 2)
-                ms2_spectra.ce = round(precursor_row["CollisionEnergy"], 1)
-                ms2_spectra.iso_width = round(precursor_row["IsolationWidth"], 1)
-                ms2_spectra.iso_mz = round(precursor_row["IsolationMz"], 4)
-                ms2_spectra.scan_begin = round(float(precursor_row["ScanNumBegin"]), 4)
-                ms2_spectra.scan_end = round(float(precursor_row["ScanNumEnd"]), 4)
-                ms2_spectra.info["Accumulation_Time"] = round(
-                    float(precursor_row["AccumulationTime"]), 4
-                )
-                ms2_spectra.info["Ramp_Time"] = round(
-                    float(precursor_row["RampTime"]), 4
-                )
-                ms2_spectra.info["PASEF_Scans"] = int(precursor_row["count"])
-
-                if "Pressure" in precursor_row:
-                    ms2_spectra.info["Pressure"] = round(
-                        float(precursor_row["Pressure"]), 4
-                    )
-
-                ook0_range = td.scanNumToOneOverK0(
-                    int(precursor_row["Id_Frame"]),
-                    [ms2_spectra.scan_begin, ms2_spectra.scan_end],
-                )
-                ms2_spectra.info["OOK0_Begin"] = round(float(ook0_range[0]), 4)
-                ms2_spectra.info["OOK0_End"] = round(float(ook0_range[1]), 4)
-
-                if include_spectra:
-                    ms2_spectra_data = list(
-                        zip(pasef_ms_ms[precursor_id][0], pasef_ms_ms[precursor_id][1])
-                    )
-
-                    if min_intensity != 0:
-                        ms2_spectra_data = [
-                            data
-                            for data in ms2_spectra_data
-                            if data[1] >= min_intensity
-                        ]
-
-                    ms2_spectra.mz_spectra = [data[0] for data in ms2_spectra_data]
-                    ms2_spectra.intensity_spectra = [
-                        int(data[1]) for data in ms2_spectra_data
-                    ]
-
-                    assert len(ms2_spectra.mz_spectra) == len(
-                        ms2_spectra.intensity_spectra
-                    )
-
-                    if (
-                        remove_empty_spectra is True
-                        and len(ms2_spectra.mz_spectra) == 0
-                    ):
-                        continue
-
-                yield ms2_spectra
-
-
 def get_ms2_prm_content(
     analysis_dir: str,
-    include_spectra: bool = True,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    remove_charge1: bool = True,
-    remove_empty_spectra: bool = True,
-    min_intensity: float = 0,
-):
-    """
-    Retrieves MS/MS spectra from a given PRM analysis directory.
+    top_n_spectra: Optional[int] = None,
+    min_intensity: float = 0.0,
+    min_charge: Optional[int] = None,
+    max_charge: Optional[int] = None,
+    min_mz: Optional[float] = None,
+    max_mz: Optional[float] = None,
+    min_rt: Optional[float] = None,
+    max_rt: Optional[float] = None,
+    min_ccs: Optional[float] = None,
+    max_ccs: Optional[float] = None,
+) -> Generator[Ms2Spectra, None, None]:
 
-    Args:
-        analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output.
-        batch_size (int, optional): Not used with PRM extractor. Retained for consistency.
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
-
-    Returns:
-        List[Ms2Spectra]: A list of Ms2Spectra objects representing MS/MS spectra.
-
-    Raises:
-        FileNotFoundError: If the analysis directory does not exist.
-    """
     with timsdata.timsdata_connect(analysis_dir) as td:
         analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
         merged_df = pd.merge(
@@ -315,7 +116,21 @@ def get_ms2_prm_content(
             merged_df.iterrows(), desc="Generating MS2 Spectra", total=len(merged_df)
         ):
 
-            if remove_charge1 is True and int(row["Charge"]) == 1:
+            if min_charge is not None and int(row["Charge"]) < min_charge:
+                continue
+            if max_charge is not None and int(row["Charge"]) > max_charge:
+                continue
+
+            # Apply m/z filters
+            if min_mz is not None and float(row["IsolationMz"]) < min_mz:
+                continue
+            if max_mz is not None and float(row["IsolationMz"]) > max_mz:
+                continue
+
+            # Apply RT filters
+            if min_rt is not None and float(row["Time_Frame"]) < min_rt:
+                continue
+            if max_rt is not None and float(row["Time_Frame"]) > max_rt:
                 continue
 
             mz_list, area_list = td.extractCentroidedSpectrumForFrame(
@@ -355,35 +170,55 @@ def get_ms2_prm_content(
             ms2_spectra.info["OOK0_Begin"] = ook0_range[0]
             ms2_spectra.info["OOK0_End"] = ook0_range[1]
 
-            if include_spectra:
+            ms2_spectra_data = list(zip(list(mz_list), list(area_list)))
 
-                ms2_spectra_data = list(zip(list(mz_list), list(area_list)))
-
-                if min_intensity != 0:
-                    ms2_spectra_data = [
-                        data for data in ms2_spectra_data if data[1] >= min_intensity
-                    ]
-
-                ms2_spectra.mz_spectra = [data[0] for data in ms2_spectra_data]
-                ms2_spectra.intensity_spectra = [
-                    int(data[1]) for data in ms2_spectra_data
+            # Remove precursor peaks if requested
+            if remove_precursor:
+                precursor_mz = float(row["IsolationMz"])
+                ms2_spectra_data = [
+                    data
+                    for data in ms2_spectra_data
+                    if abs(data[0] - precursor_mz) > precursor_peak_width
                 ]
 
-                assert len(ms2_spectra.mz_spectra) == len(ms2_spectra.intensity_spectra)
+            if min_intensity != 0:
+                ms2_spectra_data = [
+                    data for data in ms2_spectra_data if data[1] >= min_intensity
+                ]
 
-                if remove_empty_spectra is True and len(ms2_spectra.mz_spectra) == 0:
-                    continue
+            # Sort by intensity and keep top N if specified
+            if top_n_spectra is not None:
+                ms2_spectra_data.sort(key=lambda x: x[1], reverse=True)
+                ms2_spectra_data = ms2_spectra_data[:top_n_spectra]
+
+            ms2_spectra.mz_spectra = [data[0] for data in ms2_spectra_data]
+            ms2_spectra.intensity_spectra = [int(data[1]) for data in ms2_spectra_data]
+
+            assert len(ms2_spectra.mz_spectra) == len(ms2_spectra.intensity_spectra)
+
+            if len(ms2_spectra.mz_spectra) == 0:
+                continue
 
             yield ms2_spectra
 
 
 def generate_header(
     analysis_dir: str,
-    min_intensity: float,
-    remove_charge1: bool,
-    remove_empty_spectra: bool,
-    include_spectra: bool,
-    resolution: float,
+    output_file: Optional[str] = None,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
+    batch_size: int = 100,
+    top_n_spectra: Optional[int] = None,
+    min_intensity: float = 0.0,
+    min_charge: Optional[int] = None,
+    max_charge: Optional[int] = None,
+    min_mz: Optional[float] = None,
+    max_mz: Optional[float] = None,
+    min_rt: Optional[float] = None,
+    max_rt: Optional[float] = None,
+    min_ccs: Optional[float] = None,
+    max_ccs: Optional[float] = None,
+    resolution: float = 120000,
 ):
     """
     Generates a header string for MS2 data using information from the analysis file.
@@ -423,13 +258,55 @@ def generate_header(
     else:
         raise TypeError("Unknown TDF format")
 
+    MS2_HEADER = (
+        "H\tExtractor\tTimsTOF_extractor\n"
+        "H\tExtractorVersion\t{version}\n"
+        "H\tPublicationDate\t20-02-2020\n"
+        "H\tDate Converted\t{date_of_creation}\n"
+        "H\tComments\tTimsTOF_extractor written by Yu Gao, 2018\n"
+        "H\tComments\tTimsTOF_extractor modified by Titus Jung, 2019\n"
+        "H\tComments\tTimsTOF_extractor modified by Patrick Garrett, 2025\n"
+        "H\tMinimumMsMsIntensity\t{min_intensity}\n"
+        "H\tRemovePrecursor\t{remove_precursor}\n"
+        "H\tPrecursorPeakWidth\t{precursor_peak_width}\n"
+        "H\tBatchSize\t{batch_size}\n"
+        "H\tTopNSpectra\t{top_n_spectra}\n"
+        "H\tMinCharge\t{min_charge}\n"
+        "H\tMaxCharge\t{max_charge}\n"
+        "H\tMinMz\t{min_mz}\n"
+        "H\tMaxMz\t{max_mz}\n"
+        "H\tMinRt\t{min_rt}\n"
+        "H\tMaxRt\t{max_rt}\n"
+        "H\tMinCcs\t{min_ccs}\n"
+        "H\tMaxCcs\t{max_ccs}\n"
+        "H\tExtractorOptions\tMSn\n"
+        "H\tAcquisitionMethod\t{method}\n"
+        "H\tInstrumentType\tTIMSTOF\n"
+        "H\tDataType\tCentroid\n"
+        "H\tScanType\tMS2\n"
+        "H\tResolution\t{resolution}\n"
+        "H\tIsolationWindow\n"
+        "H\tFirstScan\t{first_scan:d}\n"
+        "H\tLastScan\t{last_scan:d}\n"
+        "H\tMonoIsotopic PrecMz\tTrue\n"
+    )
+
     ms2_header = MS2_HEADER.format(
         version=MS2_VERSION,
         date_of_creation=str(datetime.now().strftime("%B %d, %Y %H:%M")),
-        minimum_intensity=min_intensity,
-        remove_charge1=remove_charge1,
-        remove_empty_spectra=remove_empty_spectra,
-        include_spectra=include_spectra,
+        min_intensity=min_intensity,
+        remove_precursor=remove_precursor,
+        precursor_peak_width=precursor_peak_width,
+        batch_size=batch_size,
+        top_n_spectra=top_n_spectra if top_n_spectra is not None else "None",
+        min_charge=min_charge if min_charge is not None else "None",
+        max_charge=max_charge if max_charge is not None else "None",
+        min_mz=min_mz if min_mz is not None else "None",
+        max_mz=max_mz if max_mz is not None else "None",
+        min_rt=min_rt if min_rt is not None else "None",
+        max_rt=max_rt if max_rt is not None else "None",
+        min_ccs=min_ccs if min_ccs is not None else "None",
+        max_ccs=max_ccs if max_ccs is not None else "None",
         method=method,
         resolution=resolution,
         first_scan=first_scan,
@@ -441,60 +318,51 @@ def generate_header(
 
 def write_ms2_file(
     analysis_dir: str,
-    output_file: str = None,
-    include_spectra: bool = True,
-    batch_size: int = 1000,
-    remove_charge1: bool = True,
-    remove_empty_spectra: bool = True,
-    min_intensity: float = 0,
+    output_file: Optional[str] = None,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
+    batch_size: int = 100,
+    top_n_spectra: Optional[int] = None,
+    min_intensity: float = 0.0,
+    min_charge: Optional[int] = None,
+    max_charge: Optional[int] = None,
+    min_mz: Optional[float] = None,
+    max_mz: Optional[float] = None,
+    min_rt: Optional[float] = None,
+    max_rt: Optional[float] = None,
+    min_ccs: Optional[float] = None,
+    max_ccs: Optional[float] = None,
 ):
-    """
-    Writes MS/MS spectra data to an MS2 file.
 
-    Args:
-        analysis_dir (str): Path to the analysis directory.
-        include_spectra (bool, optional): Whether to include the actual MS/MS spectra in the output.
-        output_file (str, optional): The output file name.
-        batch_size (int, optional): The number of precursors to process in a batch.
-        remove_charge1 (bool, optional): Whether to exclude precursors with charge 1.
-        remove_empty_spectra (bool, optional): Whether to exclude MS/MS spectra with no spectra values.
-        min_intensity (float, optional): Filters out MS/MS spectral data based on intensity (inclusive).
-
-    Returns:
-        None.
-
-    Raises:
-        FileNotFoundError: If the analysis directory does not exist.
-    """
     start_time = time.time()
 
     if output_file is None:
         output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + ".ms2"
 
-    logger.info(
-        f"Arguments: analysis_dir: {analysis_dir}, output_file: {output_file}, include_spectra: {include_spectra}, "
-        f"batch_size: {batch_size}, remove_charge1: {remove_charge1}, "
-        f"remove_empty_spectra: {remove_empty_spectra}, min_intensity: {min_intensity}"
-    )
-
     logger.info("Creating Ms2 Header")
     ms2_header = generate_header(
         analysis_dir=analysis_dir,
-        include_spectra=include_spectra,
-        remove_charge1=remove_charge1,
-        remove_empty_spectra=remove_empty_spectra,
         min_intensity=min_intensity,
+        min_charge=min_charge,
         resolution=120000,
     )
 
     logger.info("Generating Ms2 Spectra")
     ms2_spectra = get_ms2_content(
         analysis_dir=analysis_dir,
-        include_spectra=include_spectra,
         batch_size=batch_size,
-        remove_charge1=remove_charge1,
-        remove_empty_spectra=remove_empty_spectra,
         min_intensity=min_intensity,
+        remove_precursor=remove_precursor,
+        precursor_peak_width=precursor_peak_width,
+        top_n_spectra=top_n_spectra,
+        min_charge=min_charge,
+        max_charge=max_charge,
+        min_mz=min_mz,
+        max_mz=max_mz,
+        min_rt=min_rt,
+        max_rt=max_rt,
+        min_ccs=min_ccs,
+        max_ccs=max_ccs,
     )
 
     logger.info("Creating MS2 Contents")
@@ -508,3 +376,168 @@ def write_ms2_file(
 
     total_time = round(time.time() - start_time, 2)
     logger.info(f"Total Time: {total_time:.2f} seconds")
+
+
+def main():
+    """
+    Command-line interface for MS2 extraction from TimsTOF data.
+    """
+    parser = argparse.ArgumentParser(
+        description="Extract MS2 files from TimsTOF .D folders",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "analysis_dir", type=str, help="Path to the .D analysis directory"
+    )
+
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=None,
+        help="Output MS2 file path (default: <analysis_dir_name>.ms2)",
+    )
+
+    parser.add_argument(
+        "--remove-precursor",
+        action="store_true",
+        help="Remove precursor peaks from MS/MS spectra",
+    )
+
+    parser.add_argument(
+        "--precursor-peak-width",
+        type=float,
+        default=2.0,
+        help="Width around precursor m/z to remove (Da)",
+    )
+
+    parser.add_argument(
+        "--batch-size", type=int, default=100, help="Batch size for processing spectra"
+    )
+
+    parser.add_argument(
+        "--top-n-spectra",
+        type=int,
+        default=None,
+        help="Keep only top N most intense peaks per spectrum",
+    )
+
+    parser.add_argument(
+        "--min-intensity",
+        type=float,
+        default=0.0,
+        help="Minimum intensity threshold for peaks",
+    )
+
+    parser.add_argument(
+        "--min-charge", type=int, default=None, help="Minimum charge state filter"
+    )
+
+    parser.add_argument(
+        "--max-charge", type=int, default=None, help="Maximum charge state filter"
+    )
+
+    parser.add_argument("--min-mz", type=float, default=None, help="Minimum m/z filter")
+
+    parser.add_argument("--max-mz", type=float, default=None, help="Maximum m/z filter")
+
+    parser.add_argument(
+        "--min-rt",
+        type=float,
+        default=None,
+        help="Minimum retention time filter (seconds)",
+    )
+
+    parser.add_argument(
+        "--max-rt",
+        type=float,
+        default=None,
+        help="Maximum retention time filter (seconds)",
+    )
+
+    parser.add_argument(
+        "--min-ccs", type=float, default=None, help="Minimum CCS filter (Ų)"
+    )
+
+    parser.add_argument(
+        "--max-ccs", type=float, default=None, help="Maximum CCS filter (Ų)"
+    )
+
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose logging"
+    )
+
+    args = parser.parse_args()
+
+    # Set up logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+    # Validate input directory
+    analysis_path = Path(args.analysis_dir)
+    if not analysis_path.exists():
+        logger.error(f"Analysis directory does not exist: {args.analysis_dir}")
+        return 1
+
+    if not analysis_path.is_dir():
+        logger.error(f"Path is not a directory: {args.analysis_dir}")
+        return 1
+
+    d_folders = []
+
+    # check if it ends in .d else look for all .d directories
+    if analysis_path.name.endswith(".d"):
+        d_folders.append(analysis_path)
+    else:
+        d_folders = list(analysis_path.glob("*.d"))
+    if not d_folders:
+        logger.error(f"No .d folders found in: {args.analysis_dir}")
+        return 1
+
+    output = args.output
+    if len(d_folders) > 1:
+        output = None
+
+    for d_folder in d_folders:
+        if not d_folder.is_dir():
+            logger.error(f"Path is not a directory: {d_folder}")
+            return 1
+
+        if not (d_folder / "analysis.tdf").exists():
+            logger.error(f"Required file not found in {d_folder}: analysis.tdf")
+            return 1
+        if not (d_folder / "analysis.tdf_bin").exists():
+            logger.error(f"Required file not found in {d_folder}: analysis.tdf_bin")
+            return 1
+        logger.info(f"Processing {d_folder}...")
+
+        try:
+            write_ms2_file(
+                analysis_dir=str(d_folder),
+                output_file=output,
+                remove_precursor=args.remove_precursor,
+                precursor_peak_width=args.precursor_peak_width,
+                batch_size=args.batch_size,
+                top_n_spectra=args.top_n_spectra,
+                min_intensity=args.min_intensity,
+                min_charge=args.min_charge,
+                max_charge=args.max_charge,
+                min_mz=args.min_mz,
+                max_mz=args.max_mz,
+                min_rt=args.min_rt,
+                max_rt=args.max_rt,
+                min_ccs=args.min_ccs,
+                max_ccs=args.max_ccs,
+            )
+            logger.info("MS2 extraction completed successfully!")
+            return 0
+        except Exception as e:
+            logger.error(f"Error during MS2 extraction: {e}")
+            return 1
+
+
+if __name__ == "__main__":
+    exit(main())

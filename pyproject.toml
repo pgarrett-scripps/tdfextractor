@@ -25,6 +25,7 @@ license = {file = "LICENSE"}
 
 [project.scripts]
 mgf-extractor = "tdfextractor.mgf_exctractor:main"
+ms2-extractor = "tdfextractor.ms2_extractor:main"
 
 
 [tool.setuptools]
@@ -32,10 +33,3 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.dynamic]
 version = {attr = "tdfextractor.__version__"}
-
-
-[tool.pylint]
-max-line-length = 120
-fail-under = 9.0
-good-names = ["mz" ,"td", "ms", "tdf", "tdfpy", "tdfextra", "i"]
-disable = ["too-many-arguments", "too-many-locals", "too-many-statements"]
