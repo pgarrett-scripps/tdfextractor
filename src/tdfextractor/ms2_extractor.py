@@ -472,7 +472,7 @@ def main():
 
     parser.add_argument(
         "--overwrite",
-        action="store_true",
+        action="store_true", 
         help="Overwrite existing output file if it exists",
     )
 
