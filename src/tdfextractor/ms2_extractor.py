@@ -457,11 +457,11 @@ def main():
     )
 
     parser.add_argument(
-        "--min-ccs", type=float, default=None, help="Minimum CCS filter (Ų)"
+        "--min-ccs", type=float, default=None, help="Minimum CCS filter"
     )
 
     parser.add_argument(
-        "--max-ccs", type=float, default=None, help="Maximum CCS filter (Ų)"
+        "--max-ccs", type=float, default=None, help="Maximum CCS filter"
     )
 
     parser.add_argument(
@@ -475,6 +475,25 @@ def main():
     logging.basicConfig(
         level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+
+    # Print all arguments being used
+    logger.info("MS2 Extractor Arguments:")
+    logger.info(f"  Analysis Directory: {args.analysis_dir}")
+    logger.info(f"  Output File: {args.output if args.output else 'Within .d folder'}")
+    logger.info(f"  Remove Precursor: {args.remove_precursor}")
+    logger.info(f"  Precursor Peak Width: {args.precursor_peak_width} Da")
+    logger.info(f"  Batch Size: {args.batch_size}")
+    logger.info(f"  Top N Spectra: {args.top_n_spectra if args.top_n_spectra else 'All'}")
+    logger.info(f"  Min Intensity: {args.min_intensity}")
+    logger.info(f"  Min Charge: {args.min_charge if args.min_charge else 'None'}")
+    logger.info(f"  Max Charge: {args.max_charge if args.max_charge else 'None'}")
+    logger.info(f"  Min m/z: {args.min_mz if args.min_mz else 'None'}")
+    logger.info(f"  Max m/z: {args.max_mz if args.max_mz else 'None'}")
+    logger.info(f"  Min RT: {args.min_rt if args.min_rt else 'None'} seconds")
+    logger.info(f"  Max RT: {args.max_rt if args.max_rt else 'None'} seconds")
+    logger.info(f"  Min CCS: {args.min_ccs if args.min_ccs else 'None'}")
+    logger.info(f"  Max CCS: {args.max_ccs if args.max_ccs else 'None'}")
+    logger.info(f"  Verbose Logging: {args.verbose}")
 
     # Validate input directory
     analysis_path = Path(args.analysis_dir)
