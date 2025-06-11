@@ -4,8 +4,6 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 
 import logging
 import os
-import signal
-import sys
 import time
 import threading
 import queue
@@ -30,8 +28,8 @@ def write_mgf_file(
     max_spectra_intensity: Optional[float] = None,
     min_spectra_mz: Optional[float] = None,
     max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[int] = None,
-    max_precursor_intensity: Optional[int] = None,
+    min_precursor_intensity: Optional[float] = None,
+    max_precursor_intensity: Optional[float] = None,
     min_precursor_charge: Optional[int] = None,
     max_precursor_charge: Optional[int] = None,
     min_precursor_mz: Optional[float] = None,
@@ -42,8 +40,8 @@ def write_mgf_file(
     max_precursor_ccs: Optional[float] = None,
     min_precursor_neutral_mass: Optional[float] = None,
     max_precursor_neutral_mass: Optional[float] = None,
-    mz_precision: int = 5,
-    intensity_precision: int = 0,
+    mz_precision: Optional[int] = 5,
+    intensity_precision: Optional[int] = 0,
     keep_empty_spectra: bool = False,
 ):
 
@@ -161,7 +159,7 @@ def main():
     )
 
     # Apply preset settings
-    apply_preset_settings(args)
+    apply_preset_settings(logger, args)
 
     # Log all arguments being used
     log_common_args(logger, args, "MGF")

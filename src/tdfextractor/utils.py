@@ -131,8 +131,8 @@ def batch_iterator(input_list: List, batch_size: int):
 
 def get_tdf_df(
     analysis_dir: str,
-    min_precursor_intensity: Optional[int] = None,
-    max_precursor_intensity: Optional[int] = None,
+    min_precursor_intensity: Optional[float] = None,
+    max_precursor_intensity: Optional[float] = None,
     min_precursor_charge: Optional[int] = None,
     max_precursor_charge: Optional[int] = None,
     min_precursor_mz: Optional[float] = None,

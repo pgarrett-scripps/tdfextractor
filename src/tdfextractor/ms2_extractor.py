@@ -7,23 +7,19 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Optional
 import threading
 import queue
 
-import pandas as pd
-from tdfpy import timsdata
 from tdfpy.pandas_tdf import PandasTdf
-from serenipy.ms2 import Ms2Spectra
 from tqdm import tqdm
 
 from .constants import MS2_VERSION
-from .utils import calculate_p1mass, get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
+from .utils import get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
 from .cli_args import create_ms2_parser, apply_preset_settings, log_common_args
 
 logger = logging.getLogger(__name__)
-# make debug
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 def generate_header(
@@ -36,8 +32,8 @@ def generate_header(
     max_spectra_intensity: Optional[float] = None,
     min_spectra_mz: Optional[float] = None,
     max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[int] = None,
-    max_precursor_intensity: Optional[int] = None,
+    min_precursor_intensity: Optional[float] = None,
+    max_precursor_intensity: Optional[float] = None,
     min_precursor_charge: Optional[int] = None,
     max_precursor_charge: Optional[int] = None,
     min_precursor_mz: Optional[float] = None,
@@ -48,8 +44,8 @@ def generate_header(
     max_precursor_ccs: Optional[float] = None,
     min_precursor_neutral_mass: Optional[float] = None,
     max_precursor_neutral_mass: Optional[float] = None,
-    mz_precision: int = 5,
-    intensity_precision: int = 0,
+    mz_precision: Optional[int] = 5,
+    intensity_precision: Optional[int] = 0,
 ):
     """
     Generates a header string for MS2 data using information from the analysis file.
@@ -200,8 +196,8 @@ def write_ms2_file(
     max_spectra_intensity: Optional[float] = None,
     min_spectra_mz: Optional[float] = None,
     max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[int] = None,
-    max_precursor_intensity: Optional[int] = None,
+    min_precursor_intensity: Optional[float] = None,
+    max_precursor_intensity: Optional[float] = None,
     min_precursor_charge: Optional[int] = None,
     max_precursor_charge: Optional[int] = None,
     min_precursor_mz: Optional[float] = None,
@@ -212,8 +208,8 @@ def write_ms2_file(
     max_precursor_ccs: Optional[float] = None,
     min_precursor_neutral_mass: Optional[float] = None,
     max_precursor_neutral_mass: Optional[float] = None,
-    mz_precision: int = 5,
-    intensity_precision: int = 0,
+    mz_precision: Optional[int] = 5,
+    intensity_precision: Optional[int] = 0,
     keep_empty_spectra: bool = False,
 ):
 
@@ -333,7 +329,7 @@ def main():
     )
 
     # Apply preset settings
-    apply_preset_settings(args)
+    apply_preset_settings(logger, args)
 
     # Log all arguments being used
     log_common_args(logger, args, "MS2")

@@ -3,7 +3,6 @@ Shared command line argument definitions for MS2 and MGF extractors.
 """
 
 import argparse
-from typing import Optional
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -49,14 +48,14 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         "--min-spectra-intensity",
         type=float,
         default=None,
-        help="Minimum intensity threshold for MS/MS peaks (absolute or 0.0-1.0 for percentage)",
+        help="Minimum intensity threshold for MS/MS peaks (absolute or relative when within [0.0-1.0] for percentage)",
     )
 
     parser.add_argument(
         "--max-spectra-intensity",
         type=float,
         default=None,
-        help="Maximum intensity threshold for MS/MS peaks (absolute or 0.0-1.0 for percentage)",
+        help="Maximum intensity threshold for MS/MS peaks (absolute or relative when within [0.0-1.0] for percentage)",
     )
 
     parser.add_argument(
@@ -75,16 +74,16 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
 
     parser.add_argument(
         "--min-precursor-intensity",
-        type=int,
+        type=float,
         default=None,
-        help="Minimum precursor intensity filter",
+        help="Minimum absolute precursor intensity filter",
     )
 
     parser.add_argument(
         "--max-precursor-intensity",
-        type=int,
+        type=float,
         default=None,
-        help="Maximum precursor intensity filter",
+        help="Maximum absolute precursor intensity filter",
     )
 
     parser.add_argument(
@@ -158,16 +157,16 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
     parser.add_argument(
-        "--mz_precision",
+        "--mz-precision",
         type=int,
-        default=5,
+        default=None,
         help="Number of decimal places for m/z values (default: 4)",
     )
 
     parser.add_argument(
-        "--intensity_precision",
+        "--intensity-precision",
         type=int,
-        default=0,
+        default=None,
         help="Number of decimal places for intensity values (default: 0)",
     )
 
@@ -236,23 +235,69 @@ def create_mgf_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_preset_settings(args: argparse.Namespace) -> None:
+def apply_preset_settings(logger, args: argparse.Namespace) -> None:
     """Apply preset settings based on flags."""
 
     if hasattr(args, "ip2") and args.ip2:
         # Set IP2 specific defaults
-        args.min_precursor_charge = 2
-        args.top_n_peaks = 500
+        if args.min_precursor_charge is not None:
+            logger.warning(
+                f"IP2 preset overridden... setting min_precursor_charge to {args.min_precursor_charge}"
+            )
+        else:
+            args.min_precursor_charge = 2
+        if args.top_n_peaks is not None:
+            logger.warning(
+                f"IP2 preset overridden... setting top_n_peaks to {args.top_n_peaks}"
+            )
+        else:
+            args.top_n_peaks = 500
 
     if hasattr(args, "casanovo") and args.casanovo:
         # Set Casanovo specific defaults
+
         args.remove_precursor = True
-        args.precursor_peak_width = 2.0
-        args.top_n_peaks = 150
-        args.min_spectra_intensity = 0.01
-        args.min_spectra_mz = 50
-        args.max_spectra_mz = 2500
-        args.min_precursor_charge = 2
+        
+        if args.precursor_peak_width is not None:
+            logger.warning(
+                f"Casanovo preset overridden... setting precursor_peak_width to {args.precursor_peak_width}"
+            )
+        else:
+            args.precursor_peak_width = 2.0
+
+        if args.top_n_peaks is not None:
+            logger.warning(
+                f"Casanovo preset overridden... setting top_n_peaks to {args.top_n_peaks}"
+            )
+        else:
+            args.top_n_peaks = 150
+        if args.min_spectra_intensity is not None:
+            logger.warning(
+                f"Casanovo preset overridden... setting min_spectra_intensity to {args.min_spectra_intensity}"
+            )
+        else:
+            args.min_spectra_intensity = 0.01
+
+        if args.min_spectra_mz is not None:
+            logger.warning(
+                f"Casanovo preset overridden... setting min_spectra_mz to {args.min_spectra_mz}"
+            )
+        else:
+            args.min_spectra_mz = 50
+
+        if args.max_spectra_mz is not None:
+            logger.warning(
+                f"Casanovo preset overroverriddeniden... setting max_spectra_mz to {args.max_spectra_mz}"
+            )
+        else:
+            args.max_spectra_mz = 2500
+
+        if args.min_precursor_intensity is not None:
+            logger.warning(
+                f"Casanovo preset overridden... setting min_precursor_intensity to {args.min_precursor_intensity}"
+            )
+        else:
+            args.min_precursor_charge = 2
 
 
 def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> None:
