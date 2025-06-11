@@ -83,6 +83,7 @@ Both MS2 and MGF extractors share the same arguments, with only a few format-spe
 | `--max-precursor-neutral-mass` | float | None | Maximum precursor neutral mass filter |
 | `--mz-precision` | int | 5 | Number of decimal places for m/z values |
 | `--intensity-precision` | int | 0 | Number of decimal places for intensity values |
+| `--keep-empty-spectra` | flag | False | Write empty spectra to output file |
 | `--overwrite` | flag | False | Overwrite existing output files |
 | `-v, --verbose` | flag | False | Enable verbose logging |
 
