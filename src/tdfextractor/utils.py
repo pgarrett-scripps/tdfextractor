@@ -506,3 +506,163 @@ def get_ms2_dda_content(
                 assert len(ms2_spectra.mz_spectra) == len(ms2_spectra.intensity_spectra)
 
                 yield ms2_spectra
+
+
+
+def get_ms2_prm_content(
+    analysis_dir: str,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
+    batch_size: int = 100,
+    top_n_spectra: Optional[int] = None,
+    min_spectra_intensity: Optional[float] = None,
+    min_precursor_charge: Optional[int] = None,
+    max_precursor_charge: Optional[int] = None,
+    min_precursor_mz: Optional[float] = None,
+    max_precursor_mz: Optional[float] = None,
+    min_precursor_rt: Optional[float] = None,
+    max_precursor_rt: Optional[float] = None,
+    min_precursor_ccs: Optional[float] = None,
+    max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
+) -> Generator[Ms2Spectra, None, None]:
+    
+    # TODO: Integrate
+
+    with timsdata.timsdata_connect(analysis_dir) as td:
+        analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
+        merged_df = pd.merge(
+            PandasTdf(analysis_tdf_path).prm_frame_msms_info,
+            PandasTdf(analysis_tdf_path).prm_targets,
+            left_on="Target",
+            right_on="Id",
+        )
+        merged_df = pd.merge(
+            merged_df,
+            PandasTdf(analysis_tdf_path).frames,
+            left_on="Frame",
+            right_on="Id",
+            suffixes=("_Target", "_Frame"),
+        )
+
+        for _, row in tqdm(
+            merged_df.iterrows(), desc="Generating MS2 Spectra", total=len(merged_df)
+        ):
+
+            if (
+                min_precursor_charge is not None
+                and int(row["Charge"]) < min_precursor_charge
+            ):
+                continue
+            if (
+                max_precursor_charge is not None
+                and int(row["Charge"]) > max_precursor_charge
+            ):
+                continue
+
+            # Apply m/z filters
+            if (
+                min_precursor_mz is not None
+                and float(row["IsolationMz"]) < min_precursor_mz
+            ):
+                continue
+            if (
+                max_precursor_mz is not None
+                and float(row["IsolationMz"]) > max_precursor_mz
+            ):
+                continue
+
+            # Apply RT filters
+            if (
+                min_precursor_rt is not None
+                and float(row["Time_Frame"]) < min_precursor_rt
+            ):
+                continue
+            if (
+                max_precursor_rt is not None
+                and float(row["Time_Frame"]) > max_precursor_rt
+            ):
+                continue
+
+            mz_list, area_list = td.extractCentroidedSpectrumForFrame(
+                frame_id=int(row["Frame"]),
+                scan_begin=int(row["ScanNumBegin"]),
+                scan_end=int(row["ScanNumEnd"]),
+                peak_picker_resolution=120000,
+            )
+
+            ms2_spectra = Ms2Spectra(
+                low_scan=int(row["Frame"]),
+                high_scan=int(row["Frame"]),
+                mz=float(row["IsolationMz"]),
+                mass=calculate_p1mass(float(row["IsolationMz"]), int(row["Charge"])),
+                charge=int(row["Charge"]),
+                info={
+                    "Target": str(int(row["Target"])),
+                    "Accumulation_Time": str(float(row["AccumulationTime"])),
+                    "Ramp_Time": str(float(row["RampTime"])),
+                    "Pressure": str(float(row["Pressure"])),
+                },
+                mz_spectra=[],
+                intensity_spectra=[],
+                charge_spectra=[],
+            )
+
+            ms2_spectra.ce = float(row["CollisionEnergy"])
+            ms2_spectra.iso_width = float(row["IsolationWidth"])
+            ms2_spectra.iso_mz = float(row["IsolationMz"])
+            ms2_spectra.rt = float(row["Time_Frame"])
+            ms2_spectra.scan_begin = float(row["ScanNumBegin"])
+            ms2_spectra.scan_end = float(row["ScanNumEnd"])
+
+            ook0_range = td.scanNumToOneOverK0(
+                int(row["Frame"]), [ms2_spectra.scan_begin, ms2_spectra.scan_end]
+            )
+            ms2_spectra.info["OOK0_Begin"] = ook0_range[0]
+            ms2_spectra.info["OOK0_End"] = ook0_range[1]
+
+            ms2_spectra_data = list(zip(list(mz_list), list(area_list)))
+
+            # Remove precursor peaks if requested
+            if remove_precursor:
+                precursor_mz = float(row["IsolationMz"])
+                ms2_spectra_data = [
+                    data
+                    for data in ms2_spectra_data
+                    if abs(data[0] - precursor_mz) > precursor_peak_width
+                ]
+
+            if min_spectra_intensity is not None:
+                if (
+                    isinstance(min_spectra_intensity, float)
+                    and 0.0 <= min_spectra_intensity <= 1.0
+                ):
+                    # Convert percentage to absolute intensity
+                    _min_intensity = (
+                        max(area_list) * min_spectra_intensity if area_list else 0
+                    )
+                elif (
+                    isinstance(min_spectra_intensity, (float, int))
+                    and min_spectra_intensity > 1.0
+                ):
+                    _min_intensity = min_spectra_intensity
+
+                ms2_spectra_data = [
+                    data for data in ms2_spectra_data if data[1] >= _min_intensity
+                ]
+
+            # Sort by intensity and keep top N if specified
+            if top_n_spectra is not None:
+                ms2_spectra_data.sort(key=lambda x: x[1], reverse=True)
+                ms2_spectra_data = ms2_spectra_data[:top_n_spectra]
+
+            ms2_spectra.mz_spectra = [data[0] for data in ms2_spectra_data]
+            ms2_spectra.intensity_spectra = [int(data[1]) for data in ms2_spectra_data]
+
+            assert len(ms2_spectra.mz_spectra) == len(ms2_spectra.intensity_spectra)
+
+            if len(ms2_spectra.mz_spectra) == 0:
+                continue
+
+            yield ms2_spectra
