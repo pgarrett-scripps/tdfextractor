@@ -4,6 +4,8 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 
 import logging
 import os
+import signal
+import sys
 import time
 import threading
 import queue
@@ -12,11 +14,10 @@ from typing import Optional
 
 from tqdm import tqdm
 
-from .utils import get_ms2_dda_content
+from .utils import get_ms2_dda_content, get_tdf_df
 from .cli_args import create_mgf_parser, apply_preset_settings, log_common_args
 
 logger = logging.getLogger(__name__)
-
 
 def write_mgf_file(
     analysis_dir: str,
@@ -43,6 +44,7 @@ def write_mgf_file(
     max_precursor_neutral_mass: Optional[float] = None,
     mz_precision: int = 5,
     intensity_precision: int = 0,
+    keep_empty_spectra: bool = False,
 ):
 
     start_time = time.time()
@@ -53,10 +55,27 @@ def write_mgf_file(
     logger.info("Generating Ms2 Spectra (producer-consumer mode)")
     spectra_queue = queue.Queue(maxsize=100)
 
+    merged_df = get_tdf_df(
+        analysis_dir,
+        min_precursor_intensity,
+        max_precursor_intensity,
+        min_precursor_charge,
+        max_precursor_charge,
+        min_precursor_mz,
+        max_precursor_mz,
+        min_precursor_rt,
+        max_precursor_rt,
+        min_precursor_ccs,
+        max_precursor_ccs,
+        min_precursor_neutral_mass,
+        max_precursor_neutral_mass,
+    )
+
     def producer():
         try:
             ms2_spectra = get_ms2_dda_content(
                 analysis_dir=analysis_dir,
+                merged_df=merged_df,
                 remove_precursor=remove_precursor,
                 precursor_peak_width=precursor_peak_width,
                 batch_size=batch_size,
@@ -65,18 +84,6 @@ def write_mgf_file(
                 max_spectra_intensity=max_spectra_intensity,
                 min_spectra_mz=min_spectra_mz,
                 max_spectra_mz=max_spectra_mz,
-                min_precursor_intensity=min_precursor_intensity,
-                max_precursor_intensity=max_precursor_intensity,
-                min_precursor_charge=min_precursor_charge,
-                max_precursor_charge=max_precursor_charge,
-                min_precursor_mz=min_precursor_mz,
-                max_precursor_mz=max_precursor_mz,
-                min_precursor_rt=min_precursor_rt,
-                max_precursor_rt=max_precursor_rt,
-                min_precursor_ccs=min_precursor_ccs,
-                max_precursor_ccs=max_precursor_ccs,
-                min_precursor_neutral_mass=min_precursor_neutral_mass,
-                max_precursor_neutral_mass=max_precursor_neutral_mass,
             )
             for spectrum in ms2_spectra:
                 spectra_queue.put(spectrum)
@@ -86,7 +93,9 @@ def write_mgf_file(
     def consumer():
         logger.info("Writing Contents To File")
         with open(output_file, "w", encoding="UTF-8") as file:
-            with tqdm(desc="Writing MGF File", unit="spectra") as pbar:
+            with tqdm(
+                desc="Writing MGF File", unit="spectra", total=len(merged_df)
+            ) as pbar:
                 # https://www.matrixscience.com/help/data_file_help.html
                 header_lines = []
                 header_lines.append(f"INSTRUMENT=TimsTOF")
@@ -96,6 +105,12 @@ def write_mgf_file(
                     spectrum = spectra_queue.get()
                     if spectrum is None:
                         break
+
+                    pbar.update(1)
+
+                    if len(spectrum.mz_spectra) == 0 and keep_empty_spectra is False:
+                        continue
+
                     mgf_lines = []
                     mgf_lines.append("BEGIN IONS")
                     mgf_lines.append(
@@ -103,16 +118,22 @@ def write_mgf_file(
                         f'File="{Path(analysis_dir).stem}", NativeID="merged={spectrum.precursor_id} frame={spectrum.parent_id} '
                         f'scanStart={spectrum.scan_begin} scanEnd={spectrum.scan_end} scan={spectrum.low_scan}"'
                     )
-                    mgf_lines.append(f"RTINSECONDS={spectrum.rt:.2f}")                    
+                    mgf_lines.append(f"RTINSECONDS={spectrum.rt:.2f}")
                     # Pepmass is actually mz? huh?
-                    mgf_lines.append(f"PEPMASS={spectrum.mz:.6f} {spectrum.prec_intensity:.{intensity_precision}f}")
+                    mgf_lines.append(
+                        f"PEPMASS={spectrum.mz:.6f} {spectrum.prec_intensity:.{intensity_precision}f}"
+                    )
                     mgf_lines.append(f"CHARGE={spectrum.charge}+")
-                    for mz, intensity in zip(spectrum.mz_spectra, spectrum.intensity_spectra):
-                        mgf_lines.append(f"{mz:.{mz_precision}f} {intensity:.{intensity_precision}f}")
+                    for mz, intensity in zip(
+                        spectrum.mz_spectra, spectrum.intensity_spectra
+                    ):
+                        mgf_lines.append(
+                            f"{mz:.{mz_precision}f} {intensity:.{intensity_precision}f}"
+                        )
                     mgf_lines.append("END IONS")
                     file.write("\n".join(mgf_lines) + "\n\n")
-                    pbar.update(1)
 
+    
     producer_thread = threading.Thread(target=producer)
     consumer_thread = threading.Thread(target=consumer)
 
@@ -129,6 +150,7 @@ def main():
     """
     Command-line interface for MGF extraction from TimsTOF data.
     """
+
     parser = create_mgf_parser()
     args = parser.parse_args()
 
@@ -224,7 +246,6 @@ def main():
             continue
 
         try:
-
             write_mgf_file(
                 analysis_dir=str(d_folder),
                 output_file=output,
@@ -248,13 +269,15 @@ def main():
                 max_precursor_ccs=args.max_precursor_ccs,
                 min_precursor_neutral_mass=args.min_precursor_neutral_mass,
                 max_precursor_neutral_mass=args.max_precursor_neutral_mass,
+                keep_empty_spectra=args.keep_empty_spectra,
             )
             logger.info("MGF extraction completed successfully!")
         except Exception as e:
             logger.error(f"Error during MGF extraction: {e}... skipping {d_folder}")
+            continue
         except KeyboardInterrupt:
-            logger.info("Extraction interrupted by user.")
-            return 0
+            logger.info("\nExtraction interrupted by user.")
+            os._exit(0)
 
 
 if __name__ == "__main__":

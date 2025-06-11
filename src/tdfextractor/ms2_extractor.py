@@ -4,6 +4,7 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 
 import logging
 import os
+import signal
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +19,7 @@ from serenipy.ms2 import Ms2Spectra, to_ms2
 from tqdm import tqdm
 
 from .constants import MS2_VERSION
-from .utils import calculate_p1mass, get_ms2_dda_content, map_precursor_to_ip2_scan_number
+from .utils import calculate_p1mass, get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
 from .cli_args import create_ms2_parser, apply_preset_settings, log_common_args
 
 logger = logging.getLogger(__name__)
@@ -51,10 +52,16 @@ def get_ms2_content(
 ) -> Generator[Ms2Spectra, None, None]:
 
     pd_tdf = PandasTdf(str(Path(analysis_dir) / "analysis.tdf"))
+
+    
     if pd_tdf.is_dda:
         logger.info("TDF format is DDA")
+
+
+
         return get_ms2_dda_content(
             analysis_dir=analysis_dir,
+            merged_df=merged_df,
             remove_precursor=remove_precursor,
             precursor_peak_width=precursor_peak_width,
             batch_size=batch_size,
@@ -63,18 +70,6 @@ def get_ms2_content(
             max_spectra_intensity=max_spectra_intensity,
             min_spectra_mz=min_spectra_mz,
             max_spectra_mz=max_spectra_mz,
-            min_precursor_intensity=min_precursor_intensity,
-            max_precursor_intensity=max_precursor_intensity,
-            min_precursor_charge=min_precursor_charge,
-            max_precursor_charge=max_precursor_charge,
-            min_precursor_mz=min_precursor_mz,
-            max_precursor_mz=max_precursor_mz,
-            min_precursor_rt=min_precursor_rt,
-            max_precursor_rt=max_precursor_rt,
-            min_precursor_ccs=min_precursor_ccs,
-            max_precursor_ccs=max_precursor_ccs,
-            min_precursor_neutral_mass=min_precursor_neutral_mass,
-            max_precursor_neutral_mass=max_precursor_neutral_mass,
         )
     if pd_tdf.is_prm:
         logger.info("TDF format is PRM")
@@ -282,7 +277,6 @@ def generate_header(
     max_precursor_neutral_mass: Optional[float] = None,
     mz_precision: int = 5,
     intensity_precision: int = 0,
-    resolution: float = 120000,
 ):
     """
     Generates a header string for MS2 data using information from the analysis file.
@@ -412,7 +406,7 @@ def generate_header(
             else "None"
         ),
         method=method,
-        resolution=resolution,
+        resolution=120000,
         mz_precision=mz_precision,
         intensity_precision=intensity_precision,
         first_scan=first_scan,
@@ -447,10 +441,8 @@ def write_ms2_file(
     max_precursor_neutral_mass: Optional[float] = None,
     mz_precision: int = 5,
     intensity_precision: int = 0,
-    resolution: float = 120000,
+    keep_empty_spectra: bool = False,
 ):
-    import queue
-    import threading
 
     start_time = time.time()
 
@@ -482,7 +474,22 @@ def write_ms2_file(
         max_precursor_neutral_mass=max_precursor_neutral_mass,
         mz_precision=mz_precision,
         intensity_precision=intensity_precision,
-        resolution=resolution,
+    )
+
+    merged_df = get_tdf_df(
+        analysis_dir,
+        min_precursor_intensity,
+        max_precursor_intensity,
+        min_precursor_charge,
+        max_precursor_charge,
+        min_precursor_mz,
+        max_precursor_mz,
+        min_precursor_rt,
+        max_precursor_rt,
+        min_precursor_ccs,
+        max_precursor_ccs,
+        min_precursor_neutral_mass,
+        max_precursor_neutral_mass
     )
 
     logger.info("Generating Ms2 Spectra (producer-consumer mode)")
@@ -490,8 +497,9 @@ def write_ms2_file(
 
     def producer():
         try:
-            for ms2_spectra in get_ms2_content(
+            ms2_spectra = get_ms2_dda_content(
                 analysis_dir=analysis_dir,
+                merged_df=merged_df,
                 remove_precursor=remove_precursor,
                 precursor_peak_width=precursor_peak_width,
                 batch_size=batch_size,
@@ -500,36 +508,31 @@ def write_ms2_file(
                 max_spectra_intensity=max_spectra_intensity,
                 min_spectra_mz=min_spectra_mz,
                 max_spectra_mz=max_spectra_mz,
-                min_precursor_intensity=min_precursor_intensity,
-                max_precursor_intensity=max_precursor_intensity,
-                min_precursor_charge=min_precursor_charge,
-                max_precursor_charge=max_precursor_charge,
-                min_precursor_mz=min_precursor_mz,
-                max_precursor_mz=max_precursor_mz,
-                min_precursor_rt=min_precursor_rt,
-                max_precursor_rt=max_precursor_rt,
-                min_precursor_ccs=min_precursor_ccs,
-                max_precursor_ccs=max_precursor_ccs,
-                min_precursor_neutral_mass=min_precursor_neutral_mass,
-                max_precursor_neutral_mass=max_precursor_neutral_mass,
-            ):
-                spectra_queue.put(ms2_spectra)
+            )
+            for spectrum in ms2_spectra:
+                spectra_queue.put(spectrum)
         finally:
             spectra_queue.put(None)  # Sentinel value
 
     def consumer():
         with open(output_file, "w", encoding="UTF-8") as file:
             file.write(ms2_header)
-            with tqdm(desc="Writing MS2 Spectra", unit="spectra") as pbar:
+            with tqdm(desc="Writing MS2 Spectra", unit="spectra", total=len(merged_df)) as pbar:
                 while True:
                     ms2_spectra = spectra_queue.get()
+
                     if ms2_spectra is None:
                         break
+
+                    pbar.update(1)
+
+                    if len(ms2_spectra.mz_spectra) == 0 and keep_empty_spectra is False:
+                        continue
+
                     file.write(ms2_spectra.serialize(
                         mz_precision=mz_precision,
                         intensity_precision=intensity_precision,
                     ))
-                    pbar.update(1)
 
     producer_thread = threading.Thread(target=producer)
     consumer_thread = threading.Thread(target=consumer)
@@ -542,11 +545,11 @@ def write_ms2_file(
     total_time = round(time.time() - start_time, 2)
     logger.info(f"Total Time: {total_time:.2f} seconds")
 
-
 def main():
     """
-    Command-line interface for MS2 extraction from TimsTOF data.
+    Command-line interface for MGF extraction from TimsTOF data.
     """
+    
     parser = create_ms2_parser()
     args = parser.parse_args()
 
@@ -668,6 +671,7 @@ def main():
                 max_precursor_ccs=args.max_precursor_ccs,
                 min_precursor_neutral_mass=args.min_precursor_neutral_mass,
                 max_precursor_neutral_mass=args.max_precursor_neutral_mass,
+                keep_empty_spectra=args.keep_empty_spectra,
             )
             logger.info("MS2 extraction completed successfully!")
         except Exception as e:
@@ -675,7 +679,7 @@ def main():
             logger.error(e, exc_info=True)
         except KeyboardInterrupt:
             logger.info("Extraction interrupted by user.")
-            return 0
+            os._exit(0)
 
 
 if __name__ == "__main__":

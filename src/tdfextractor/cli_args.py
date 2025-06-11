@@ -172,6 +172,12 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
     parser.add_argument(
+        "--keep-empty-spectra",
+        action="store_true",
+        help="Keep spectra with no peaks (default: False)",
+    )
+
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
 
@@ -259,59 +265,60 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
     logger.info(f"  Precursor Peak Width: {args.precursor_peak_width} Da")
     logger.info(f"  Batch Size: {args.batch_size}")
     logger.info(
-        f"  Top N Peaks: {args.top_n_peaks if args.top_n_peaks else 'All'}"
+        f"  Top N Peaks: {args.top_n_peaks if args.top_n_peaks is not None else 'All'}"
     )
     logger.info(
-        f"  Min Spectra Intensity: {args.min_spectra_intensity if args.min_spectra_intensity else 'None'}"
+        f"  Min Spectra Intensity: {args.min_spectra_intensity if args.min_spectra_intensity is not None else 'None'}"
     )
     logger.info(
-        f"  Max Spectra Intensity: {args.max_spectra_intensity if args.max_spectra_intensity else 'None'}"
+        f"  Max Spectra Intensity: {args.max_spectra_intensity if args.max_spectra_intensity is not None else 'None'}"
     )
     logger.info(
-        f"  Min Spectra m/z: {args.min_spectra_mz if args.min_spectra_mz else 'None'}"
+        f"  Min Spectra m/z: {args.min_spectra_mz if args.min_spectra_mz is not None else 'None'}"
     )
     logger.info(
-        f"  Max Spectra m/z: {args.max_spectra_mz if args.max_spectra_mz else 'None'}"
+        f"  Max Spectra m/z: {args.max_spectra_mz if args.max_spectra_mz is not None else 'None'}"
     )
     logger.info(
-        f"  Min Precursor Intensity: {args.min_precursor_intensity if args.min_precursor_intensity else 'None'}"
+        f"  Min Precursor Intensity: {args.min_precursor_intensity if args.min_precursor_intensity is not None else 'None'}"
     )
     logger.info(
-        f"  Max Precursor Intensity: {args.max_precursor_intensity if args.max_precursor_intensity else 'None'}"
+        f"  Max Precursor Intensity: {args.max_precursor_intensity if args.max_precursor_intensity is not None else 'None'}"
     )
     logger.info(
-        f"  Min Precursor Charge: {args.min_precursor_charge if args.min_precursor_charge else 'None'}"
+        f"  Min Precursor Charge: {args.min_precursor_charge if args.min_precursor_charge is not None else 'None'}"
     )
     logger.info(
-        f"  Max Precursor Charge: {args.max_precursor_charge if args.max_precursor_charge else 'None'}"
+        f"  Max Precursor Charge: {args.max_precursor_charge if args.max_precursor_charge is not None else 'None'}"
     )
     logger.info(
-        f"  Min Precursor m/z: {args.min_precursor_mz if args.min_precursor_mz else 'None'}"
+        f"  Min Precursor m/z: {args.min_precursor_mz if args.min_precursor_mz is not None else 'None'}"
     )
     logger.info(
-        f"  Max Precursor m/z: {args.max_precursor_mz if args.max_precursor_mz else 'None'}"
+        f"  Max Precursor m/z: {args.max_precursor_mz if args.max_precursor_mz is not None else 'None'}"
     )
     logger.info(
-        f"  Min Precursor RT: {args.min_precursor_rt if args.min_precursor_rt else 'None'} seconds"
+        f"  Min Precursor RT: {args.min_precursor_rt if args.min_precursor_rt is not None else 'None'} seconds"
     )
     logger.info(
-        f"  Max Precursor RT: {args.max_precursor_rt if args.max_precursor_rt else 'None'} seconds"
+        f"  Max Precursor RT: {args.max_precursor_rt if args.max_precursor_rt is not None else 'None'} seconds"
     )
     logger.info(
-        f"  Min Precursor CCS: {args.min_precursor_ccs if args.min_precursor_ccs else 'None'}"
+        f"  Min Precursor CCS: {args.min_precursor_ccs if args.min_precursor_ccs is not None else 'None'}"
     )
     logger.info(
-        f"  Max Precursor CCS: {args.max_precursor_ccs if args.max_precursor_ccs else 'None'}"
+        f"  Max Precursor CCS: {args.max_precursor_ccs if args.max_precursor_ccs is not None else 'None'}"
     )
     logger.info(
-        f"  Min Precursor Neutral Mass: {args.min_precursor_neutral_mass if args.min_precursor_neutral_mass else 'None'}"
+        f"  Min Precursor Neutral Mass: {args.min_precursor_neutral_mass if args.min_precursor_neutral_mass is not None else 'None'}"
     )
     logger.info(
-        f"  Max Precursor Neutral Mass: {args.max_precursor_neutral_mass if args.max_precursor_neutral_mass else 'None'}"
+        f"  Max Precursor Neutral Mass: {args.max_precursor_neutral_mass if args.max_precursor_neutral_mass is not None else 'None'}"
     )
     logger.info(f"  Overwrite Existing Output: {args.overwrite}")
     logger.info(f"  m/z Precision: {args.mz_precision} decimal places")
     logger.info(f"  Intensity Precision: {args.intensity_precision} decimal places")
+    logger.info(f"  Keep Empty Spectra: {args.keep_empty_spectra}")
     logger.info(f"  Verbose Logging: {args.verbose}")
 
     # Log preset-specific settings

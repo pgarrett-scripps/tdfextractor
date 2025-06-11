@@ -19,16 +19,17 @@ Extract MS2 format files (compatible with MS-GF+, Comet, etc.):
 ms2-extractor /path/to/sample.d
 
 # shorthand
-ms2-ex /path/to/sample.d
+ms2-ex 
 ms2-ex /path/to/sample.d --output custom_output.ms2 --min-intensity 100 --min-charge 2
 ms2-ex /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
 ```
 
 ### MGF Extraction  
-Extract MGF format files (compatible with Mascot, MaxQuant, etc.):
+Extract MGF format files
 
 ```bash
 mgf-extractor /path/to/sample.d
+
 #shorthand
 mgf-ex
 mgf-ex /path/to/sample.d --casanovo  # Optimized for Casanovo de novo sequencing

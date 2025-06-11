@@ -115,8 +115,10 @@ def map_precursor_to_ip2_scan_number(
 def calculate_p1mass(mz: float, charge: int) -> float:
     return calculate_mass(mz, charge) - (charge - 1) * PROTON_MASS
 
+
 def calculate_nmass(mz: float, charge: int) -> float:
     return calculate_mass(mz, charge) - charge * PROTON_MASS
+
 
 def calculate_mass(mz: float, charge: int) -> float:
     return mz * charge
@@ -127,16 +129,8 @@ def batch_iterator(input_list: List, batch_size: int):
         yield input_list[i : i + batch_size]
 
 
-def get_ms2_dda_content(
+def get_tdf_df(
     analysis_dir: str,
-    remove_precursor: bool = False,
-    precursor_peak_width: float = 2.0,
-    batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
     min_precursor_intensity: Optional[int] = None,
     max_precursor_intensity: Optional[int] = None,
     min_precursor_charge: Optional[int] = None,
@@ -149,147 +143,206 @@ def get_ms2_dda_content(
     max_precursor_ccs: Optional[float] = None,
     min_precursor_neutral_mass: Optional[float] = None,
     max_precursor_neutral_mass: Optional[float] = None,
+) -> pd.DataFrame:
+
+    analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
+    pd_tdf = PandasTdf(analysis_tdf_path)
+
+    precursors_df = pd_tdf.precursors
+    frames_df = pd_tdf.frames
+
+    merged_df = pd.merge(
+        precursors_df,
+        pd_tdf.frames,
+        left_on="Parent",
+        right_on="Id",
+        suffixes=("_Precursor", "_Frame"),
+    )
+
+    pasef_frame_msms_info_df = pd_tdf.pasef_frame_msms_info.drop(["Frame"], axis=1)
+
+    # count the number of items in each group
+    pasef_frame_msms_info_df["count"] = pasef_frame_msms_info_df.groupby("Precursor")[
+        "Precursor"
+    ].transform("count")
+
+    # keep only the row for each group
+    pasef_frame_msms_info_df = pasef_frame_msms_info_df.drop_duplicates(
+        subset="Precursor", keep="first"
+    )
+    assert len(pasef_frame_msms_info_df) == len(merged_df)
+
+    merged_df = pd.merge(
+        merged_df,
+        pasef_frame_msms_info_df,
+        left_on="Id_Precursor",
+        right_on="Precursor",
+        suffixes=("_Precursor", "_PasefFrameMsmsInfo"),
+    ).drop("Precursor", axis=1)
+
+    precursor_to_scan_number = map_precursor_to_ip2_scan_number(
+        precursors_df, frames_df
+    )
+    merged_df["IP2ScanNumber"] = merged_df["Id_Precursor"].map(precursor_to_scan_number)
+    merged_df.dropna(subset=["MonoisotopicMz", "Charge"], inplace=True)
+
+    # add col for neutral mass
+    merged_df["NeutralMass"] = merged_df.apply(
+        lambda row: calculate_nmass(row["MonoisotopicMz"], row["Charge"]),
+        axis=1,
+    )
+
+    initial_rows = len(merged_df)
+    logging.info(f"Initial number of precursors: {initial_rows}")
+
+    if min_precursor_neutral_mass is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["NeutralMass"] >= min_precursor_neutral_mass]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by min_precursor_neutral_mass >= {min_precursor_neutral_mass} (remaining: {after_filter})"
+        )
+
+    if max_precursor_neutral_mass is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["NeutralMass"] <= max_precursor_neutral_mass]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by max_precursor_neutral_mass <= {max_precursor_neutral_mass} (remaining: {after_filter})"
+        )
+
+    if min_precursor_charge is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["Charge"] >= min_precursor_charge]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by min_precursor_charge >= {min_precursor_charge} (remaining: {after_filter})"
+        )
+
+    if max_precursor_charge is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["Charge"] <= max_precursor_charge]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by max_precursor_charge <= {max_precursor_charge} (remaining: {after_filter})"
+        )
+
+    if min_precursor_mz is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["MonoisotopicMz"] >= min_precursor_mz]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by min_precursor_mz >= {min_precursor_mz} (remaining: {after_filter})"
+        )
+
+    if max_precursor_mz is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["MonoisotopicMz"] <= max_precursor_mz]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by max_precursor_mz <= {max_precursor_mz} (remaining: {after_filter})"
+        )
+
+    if min_precursor_rt is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["Time"] >= min_precursor_rt]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by min_precursor_rt >= {min_precursor_rt} (remaining: {after_filter})"
+        )
+
+    if max_precursor_rt is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["Time"] <= max_precursor_rt]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by max_precursor_rt <= {max_precursor_rt} (remaining: {after_filter})"
+        )
+
+    if min_precursor_intensity is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["Intensity"] >= min_precursor_intensity]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by min_precursor_intensity >= {min_precursor_intensity} (remaining: {after_filter})"
+        )
+
+    if max_precursor_intensity is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["Intensity"] <= max_precursor_intensity]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by max_precursor_intensity <= {max_precursor_intensity} (remaining: {after_filter})"
+        )
+
+    with timsdata.timsdata_connect(analysis_dir) as td:
+        merged_df["OOK0"] = merged_df.apply(
+            lambda row: td.scanNumToOneOverK0(int(row["Parent"]), [row["ScanNumber"]])[
+                0
+            ],
+            axis=1,
+        )
+
+    merged_df["CCS"] = merged_df.apply(
+        lambda row: timsdata.oneOverK0ToCCSforMz(
+            row["OOK0"], int(row["Charge"]), row["MonoisotopicMz"]
+        ),
+        axis=1,
+    )
+
+    if min_precursor_ccs is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["CCS"] >= min_precursor_ccs]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by min_precursor_ccs >= {min_precursor_ccs} (remaining: {after_filter})"
+        )
+
+    if max_precursor_ccs is not None:
+        before_filter = len(merged_df)
+        merged_df = merged_df[merged_df["CCS"] <= max_precursor_ccs]
+        after_filter = len(merged_df)
+        filtered_count = before_filter - after_filter
+        logging.info(
+            f"Filtered {filtered_count} precursors by max_precursor_ccs <= {max_precursor_ccs} (remaining: {after_filter})"
+        )
+
+    final_rows = len(merged_df)
+    total_filtered = initial_rows - final_rows
+    logging.info(
+        f"Total precursors filtered: {total_filtered} ({(total_filtered/initial_rows)*100:.1f}%), Final count: {final_rows}"
+    )
+    return merged_df
+
+
+def get_ms2_dda_content(
+    analysis_dir: str,
+    merged_df: pd.DataFrame,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
+    batch_size: int = 100,
+    top_n_peaks: Optional[int] = None,
+    min_spectra_intensity: Optional[float] = None,
+    max_spectra_intensity: Optional[float] = None,
+    min_spectra_mz: Optional[float] = None,
+    max_spectra_mz: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
     with timsdata.timsdata_connect(analysis_dir) as td:
 
-        analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
-        pd_tdf = PandasTdf(analysis_tdf_path)
-
-        precursors_df = pd_tdf.precursors
-        frames_df = pd_tdf.frames
-
-        merged_df = pd.merge(
-            precursors_df,
-            pd_tdf.frames,
-            left_on="Parent",
-            right_on="Id",
-            suffixes=("_Precursor", "_Frame"),
-        )
-
-        pasef_frame_msms_info_df = pd_tdf.pasef_frame_msms_info.drop(["Frame"], axis=1)
-
-        # count the number of items in each group
-        pasef_frame_msms_info_df["count"] = pasef_frame_msms_info_df.groupby(
-            "Precursor"
-        )["Precursor"].transform("count")
-
-        # keep only the row for each group
-        pasef_frame_msms_info_df = pasef_frame_msms_info_df.drop_duplicates(
-            subset="Precursor", keep="first"
-        )
-        assert len(pasef_frame_msms_info_df) == len(merged_df)
-
-        merged_df = pd.merge(
-            merged_df,
-            pasef_frame_msms_info_df,
-            left_on="Id_Precursor",
-            right_on="Precursor",
-            suffixes=("_Precursor", "_PasefFrameMsmsInfo"),
-        ).drop("Precursor", axis=1)
-
-        precursor_to_scan_number = map_precursor_to_ip2_scan_number(
-            precursors_df, frames_df
-        )
-        merged_df["IP2ScanNumber"] = merged_df["Id_Precursor"].map(
-            precursor_to_scan_number
-        )
-        merged_df.dropna(subset=["MonoisotopicMz", "Charge"], inplace=True)
-
-        # add col for neutral mass
-        merged_df["NeutralMass"] = merged_df.apply(
-            lambda row: calculate_nmass(row["MonoisotopicMz"], row["Charge"]),
-            axis=1,
-        )
-        
-        initial_rows = len(merged_df)
-        logging.info(f"Initial number of precursors: {initial_rows}")
-        
-        if min_precursor_neutral_mass is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[
-                merged_df["NeutralMass"] >= min_precursor_neutral_mass
-            ]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by min_precursor_neutral_mass >= {min_precursor_neutral_mass} (remaining: {after_filter})")
-            
-        if max_precursor_neutral_mass is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[
-                merged_df["NeutralMass"] <= max_precursor_neutral_mass
-            ]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by max_precursor_neutral_mass <= {max_precursor_neutral_mass} (remaining: {after_filter})")
-            
-        if min_precursor_charge is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["Charge"] >= min_precursor_charge]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by min_precursor_charge >= {min_precursor_charge} (remaining: {after_filter})")
-            
-        if max_precursor_charge is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["Charge"] <= max_precursor_charge]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by max_precursor_charge <= {max_precursor_charge} (remaining: {after_filter})")
-            
-        if min_precursor_mz is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["MonoisotopicMz"] >= min_precursor_mz]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by min_precursor_mz >= {min_precursor_mz} (remaining: {after_filter})")
-            
-        if max_precursor_mz is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["MonoisotopicMz"] <= max_precursor_mz]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by max_precursor_mz <= {max_precursor_mz} (remaining: {after_filter})")
-            
-        if min_precursor_rt is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["Time"] >= min_precursor_rt]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by min_precursor_rt >= {min_precursor_rt} (remaining: {after_filter})")
-            
-        if max_precursor_rt is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["Time"] <= max_precursor_rt]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by max_precursor_rt <= {max_precursor_rt} (remaining: {after_filter})")
-            
-        if min_precursor_intensity is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["Intensity"] >= min_precursor_intensity]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by min_precursor_intensity >= {min_precursor_intensity} (remaining: {after_filter})")
-            
-        if max_precursor_intensity is not None:
-            before_filter = len(merged_df)
-            merged_df = merged_df[merged_df["Intensity"] <= max_precursor_intensity]
-            after_filter = len(merged_df)
-            filtered_count = before_filter - after_filter
-            logging.info(f"Filtered {filtered_count} precursors by max_precursor_intensity <= {max_precursor_intensity} (remaining: {after_filter})")
-
-        final_rows = len(merged_df)
-        total_filtered = initial_rows - final_rows
-        logging.info(f"Total precursors filtered: {total_filtered} ({(total_filtered/initial_rows)*100:.1f}%), Final count: {final_rows}")
-
-        for precursor_batch in tqdm(
-            list(
-                batch_iterator(
-                    input_list=list(merged_df.iterrows()), batch_size=batch_size
-                )
-            ),
-            desc="Generating MS2 Spectra",
+        for precursor_batch in batch_iterator(
+            input_list=list(merged_df.iterrows()), batch_size=batch_size
         ):
             pasef_ms_ms = None
             pasef_ms_ms = td.readPasefMsMs(
@@ -306,18 +359,8 @@ def get_ms2_dda_content(
                 charge = int(precursor_row["Charge"])
 
                 ip2_scan_number = precursor_row["IP2ScanNumber"]
-                ook0 = td.scanNumToOneOverK0(parent_id, [precursor_row["ScanNumber"]])[
-                    0
-                ]
-                ccs = timsdata.oneOverK0ToCCSforMz(
-                    ook0, charge, precursor_row["MonoisotopicMz"]
-                )
-
-                if min_precursor_ccs is not None and ccs < min_precursor_ccs:
-                    continue
-                if max_precursor_ccs is not None and ccs > max_precursor_ccs:
-                    continue
-
+                ook0 = precursor_row["OOK0"]
+                ccs = precursor_row["CCS"]
                 mz = precursor_row["MonoisotopicMz"]
                 prec_intensity = precursor_row["Intensity"]
                 mass = calculate_p1mass(mz, charge)
@@ -370,11 +413,11 @@ def get_ms2_dda_content(
                 )
 
                 if len(ms2_spectra_data) == 0:
-                    continue
-
-                # Convert to numpy arrays for faster operations
-                mz_array = np.array([data[0] for data in ms2_spectra_data])
-                intensity_array = np.array([data[1] for data in ms2_spectra_data])
+                    mz_array = np.array([])
+                    intensity_array = np.array([])
+                else:
+                    mz_array = np.array([data[0] for data in ms2_spectra_data])
+                    intensity_array = np.array([data[1] for data in ms2_spectra_data])
 
                 # Apply min_intensity filter
                 if min_spectra_intensity is not None:
@@ -395,9 +438,6 @@ def get_ms2_dda_content(
                     mz_array = mz_array[intensity_mask]
                     intensity_array = intensity_array[intensity_mask]
 
-                    if len(mz_array) == 0:
-                        continue
-
                 # Apply max_intensity filter
                 if max_spectra_intensity is not None:
                     if (
@@ -416,26 +456,17 @@ def get_ms2_dda_content(
                     mz_array = mz_array[intensity_mask]
                     intensity_array = intensity_array[intensity_mask]
 
-                    if len(mz_array) == 0:
-                        continue
-
                 if min_spectra_mz is not None:
                     mz_mask = mz_array >= min_spectra_mz
                     mz_array = mz_array[mz_mask]
                     intensity_array = intensity_array[mz_mask]
-
-                    if len(mz_array) == 0:
-                        continue
 
                 if max_spectra_mz is not None:
                     mz_mask = mz_array <= max_spectra_mz
                     mz_array = mz_array[mz_mask]
                     intensity_array = intensity_array[mz_mask]
 
-                    if len(mz_array) == 0:
-                        continue
-
-                if remove_precursor:
+                if remove_precursor is True:
                     # Remove precursor peak from MS/MS spectra
                     precursor_mz = ms2_spectra.mz
                     min_prec_mz = precursor_mz - precursor_peak_width
@@ -447,16 +478,21 @@ def get_ms2_dda_content(
                     mz_array = mz_array[precursor_mask]
                     intensity_array = intensity_array[precursor_mask]
 
-                    if len(mz_array) == 0:
-                        continue
-
                 if top_n_peaks is not None and len(intensity_array) > top_n_peaks:
-                    # Get indices of top N intensities
-                    top_indices = np.argpartition(intensity_array, -top_n_peaks)[
-                        -top_n_peaks:
-                    ]
-                    mz_array = mz_array[top_indices]
-                    intensity_array = intensity_array[top_indices]
+
+                    if top_n_peaks < 0:
+                        raise ValueError("top_n_peaks must be a positive integer")
+
+                    elif top_n_peaks == 0:
+                        mz_array = np.array([])
+                        intensity_array = np.array([])
+                    elif top_n_peaks > len(intensity_array):
+                        # Get indices of top N intensities
+                        top_indices = np.argpartition(intensity_array, -top_n_peaks)[
+                            -top_n_peaks:
+                        ]
+                        mz_array = mz_array[top_indices]
+                        intensity_array = intensity_array[top_indices]
 
                 # Sort by m/z values
                 sort_indices = np.argsort(mz_array)
@@ -468,8 +504,5 @@ def get_ms2_dda_content(
                 ms2_spectra.intensity_spectra = intensity_array.astype(int).tolist()
 
                 assert len(ms2_spectra.mz_spectra) == len(ms2_spectra.intensity_spectra)
-
-                if len(ms2_spectra.mz_spectra) == 0:
-                    continue
 
                 yield ms2_spectra
