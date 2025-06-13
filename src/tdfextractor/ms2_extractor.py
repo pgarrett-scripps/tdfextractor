@@ -14,7 +14,6 @@ import queue
 from tdfpy.pandas_tdf import PandasTdf
 from tqdm import tqdm
 
-from .constants import MS2_VERSION
 from .utils import get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
 from .cli_args import create_ms2_parser, apply_preset_settings, log_common_args
 
@@ -128,7 +127,7 @@ def generate_header(
     )
 
     ms2_header = MS2_HEADER.format(
-        version=MS2_VERSION,
+        version='TDF-Extractor',
         date_of_creation=str(datetime.now().strftime("%B %d, %Y %H:%M")),
         min_spectra_intensity=(
             min_spectra_intensity if min_spectra_intensity is not None else "None"
