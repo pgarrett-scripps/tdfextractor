@@ -2,4 +2,6 @@
 Package for tdfextractor.
 """
 
-__version__ = "0.3.1"
+from .utils import get_ms2_dda_content
+
+__version__ = "0.4.0"

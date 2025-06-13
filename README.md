@@ -69,8 +69,8 @@ Both MS2 and MGF extractors share the same arguments, with only a few format-spe
 | `--max-spectra-intensity` | float | None | Maximum intensity threshold for MS/MS peaks (absolute or 0.0-1.0 for percentage) |
 | `--min-spectra-mz` | float | None | Minimum m/z filter for MS/MS peaks |
 | `--max-spectra-mz` | float | None | Maximum m/z filter for MS/MS peaks |
-| `--min-precursor-intensity` | int | None | Minimum precursor intensity filter |
-| `--max-precursor-intensity` | int | None | Maximum precursor intensity filter |
+| `--min-precursor-intensity` | float | None | Minimum precursor intensity filter |
+| `--max-precursor-intensity` | float | None | Maximum precursor intensity filter |
 | `--min-precursor-charge` | int | None | Minimum precursor charge state filter |
 | `--max-precursor-charge` | int | None | Maximum precursor charge state filter |
 | `--min-precursor-mz` | float | None | Minimum precursor m/z filter |
@@ -85,12 +85,24 @@ Both MS2 and MGF extractors share the same arguments, with only a few format-spe
 | `--intensity-precision` | int | 0 | Number of decimal places for intensity values |
 | `--keep-empty-spectra` | flag | False | Write empty spectra to output file |
 | `--overwrite` | flag | False | Overwrite existing output files |
+| `--workers` | int | 1 | Number of worker threads for processing multiple .d folders |
 | `-v, --verbose` | flag | False | Enable verbose logging |
 
 ### Format-Specific Arguments
 
 **MS2 Extractor Only:**
-- `--ip2`: Use IP2 preset settings (sets min charge to 1)
+- `--ip2`: Use IP2 preset settings (sets min charge to 2, top 500 peaks)
 
 **MGF Extractor Only:**
-- `--casanovo`: Use Casanovo preset settings (enables precursor removal, top-150 peaks, min intensity 0.01, m/z range 50-2500, min charge 1)
+- `--casanovo`: Use Casanovo preset settings (enables precursor removal, top-150 peaks, min intensity 0.01, m/z range 50-2500, min charge 2)
+
+### Performance Options
+
+The `--workers` argument allows parallel processing of multiple .d folders:
+
+```bash
+# Process multiple .d folders with 4 worker threads
+mgf-ex /path/to/directory_with_multiple_d_folders --workers 4
+```
+
+**Note**: Workers only affect processing when multiple .d folders are being processed simultaneously. Each worker processes one complete .d folder independently.

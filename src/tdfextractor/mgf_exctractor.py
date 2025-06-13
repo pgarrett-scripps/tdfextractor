@@ -9,6 +9,7 @@ import threading
 import queue
 from pathlib import Path
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
 
@@ -50,7 +51,6 @@ def write_mgf_file(
     if output_file is None:
         output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mgf"
 
-    logger.info("Generating Ms2 Spectra (producer-consumer mode)")
     spectra_queue = queue.Queue(maxsize=100)
 
     merged_df = get_tdf_df(
@@ -144,6 +144,65 @@ def write_mgf_file(
     logger.info(f"Total Time: {total_time:.2f} seconds")
 
 
+def process_single_d_folder(d_folder, args, output_dir, output_name):
+    """Process a single .d folder with error handling."""
+    try:
+        if not d_folder.is_dir():
+            logger.error(f"Path is not a directory: {d_folder}")
+            return False
+
+        if not (d_folder / "analysis.tdf").exists():
+            logger.error(f"Required file not found in {d_folder}: analysis.tdf")
+            return False
+        if not (d_folder / "analysis.tdf_bin").exists():
+            logger.error(f"Required file not found in {d_folder}: analysis.tdf_bin")
+            return False
+
+        logger.info(f"Processing {d_folder}...")
+
+        _output_dir = output_dir if output_dir is not None else d_folder
+        _output_name = (
+            output_name if output_name is not None else Path(d_folder).stem + ".mgf"
+        )
+
+        output = os.path.join(_output_dir, _output_name)
+        logger.info(f"Output file: {output}")
+
+        if not args.overwrite and Path(output).exists():
+            logger.warning(f"Output file {output} already exists. Skipping...")
+            return True
+
+        write_mgf_file(
+            analysis_dir=str(d_folder),
+            output_file=output,
+            remove_precursor=args.remove_precursor,
+            precursor_peak_width=args.precursor_peak_width,
+            batch_size=args.batch_size,
+            top_n_peaks=args.top_n_peaks,
+            min_spectra_intensity=args.min_spectra_intensity,
+            max_spectra_intensity=args.max_spectra_intensity,
+            min_spectra_mz=args.min_spectra_mz,
+            max_spectra_mz=args.max_spectra_mz,
+            min_precursor_intensity=args.min_precursor_intensity,
+            max_precursor_intensity=args.max_precursor_intensity,
+            min_precursor_charge=args.min_precursor_charge,
+            max_precursor_charge=args.max_precursor_charge,
+            min_precursor_mz=args.min_precursor_mz,
+            max_precursor_mz=args.max_precursor_mz,
+            min_precursor_rt=args.min_precursor_rt,
+            max_precursor_rt=args.max_precursor_rt,
+            min_precursor_ccs=args.min_precursor_ccs,
+            max_precursor_ccs=args.max_precursor_ccs,
+            min_precursor_neutral_mass=args.min_precursor_neutral_mass,
+            max_precursor_neutral_mass=args.max_precursor_neutral_mass,
+            keep_empty_spectra=args.keep_empty_spectra,
+        )
+        logger.info(f"MGF extraction completed successfully for {d_folder}!")
+        return True
+    except Exception as e:
+        logger.error(f"Error during MGF extraction for {d_folder}: {e}")
+        return False
+
 def main():
     """
     Command-line interface for MGF extraction from TimsTOF data.
@@ -217,65 +276,48 @@ def main():
 
         output_name = None
 
-    for d_folder in d_folders:
-        if not d_folder.is_dir():
-            logger.error(f"Path is not a directory: {d_folder}")
-            return 1
-
-        if not (d_folder / "analysis.tdf").exists():
-            logger.error(f"Required file not found in {d_folder}: analysis.tdf")
-            return 1
-        if not (d_folder / "analysis.tdf_bin").exists():
-            logger.error(f"Required file not found in {d_folder}: analysis.tdf_bin")
-            return 1
-
-        logger.info(f"Processing {d_folder}...")
-
-        _output_dir = output_dir if output_dir is not None else d_folder
-        _output_name = (
-            output_name if output_name is not None else Path(d_folder).stem + ".mgf"
-        )
-
-        output = os.path.join(_output_dir, _output_name)
-        logger.info(f"Output file: {output}")
-
-        if not args.overwrite and Path(output).exists():
-            logger.warning(f"Output file {output} already exists. Skipping...")
-            continue
-
+    # Process .d folders with multiple workers if specified
+    if len(d_folders) > 1 and args.workers > 1:
+        logger.info(f"Processing {len(d_folders)} .d folders using {args.workers} workers...")
+        
+        successful_count = 0
+        failed_count = 0
+        
         try:
-            write_mgf_file(
-                analysis_dir=str(d_folder),
-                output_file=output,
-                remove_precursor=args.remove_precursor,
-                precursor_peak_width=args.precursor_peak_width,
-                batch_size=args.batch_size,
-                top_n_peaks=args.top_n_peaks,
-                min_spectra_intensity=args.min_spectra_intensity,
-                max_spectra_intensity=args.max_spectra_intensity,
-                min_spectra_mz=args.min_spectra_mz,
-                max_spectra_mz=args.max_spectra_mz,
-                min_precursor_intensity=args.min_precursor_intensity,
-                max_precursor_intensity=args.max_precursor_intensity,
-                min_precursor_charge=args.min_precursor_charge,
-                max_precursor_charge=args.max_precursor_charge,
-                min_precursor_mz=args.min_precursor_mz,
-                max_precursor_mz=args.max_precursor_mz,
-                min_precursor_rt=args.min_precursor_rt,
-                max_precursor_rt=args.max_precursor_rt,
-                min_precursor_ccs=args.min_precursor_ccs,
-                max_precursor_ccs=args.max_precursor_ccs,
-                min_precursor_neutral_mass=args.min_precursor_neutral_mass,
-                max_precursor_neutral_mass=args.max_precursor_neutral_mass,
-                keep_empty_spectra=args.keep_empty_spectra,
-            )
-            logger.info("MGF extraction completed successfully!")
-        except Exception as e:
-            logger.error(f"Error during MGF extraction: {e}... skipping {d_folder}")
-            continue
+            with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                # Submit all jobs
+                future_to_folder = {
+                    executor.submit(process_single_d_folder, d_folder, args, output_dir, output_name): d_folder
+                    for d_folder in d_folders
+                }
+                
+                # Process completed jobs
+                for future in as_completed(future_to_folder):
+                    d_folder = future_to_folder[future]
+                    try:
+                        success = future.result()
+                        if success:
+                            successful_count += 1
+                        else:
+                            failed_count += 1
+                    except Exception as e:
+                        logger.error(f"Unexpected error processing {d_folder}: {e}")
+                        failed_count += 1
         except KeyboardInterrupt:
             logger.info("\nExtraction interrupted by user.")
             os._exit(0)
+            
+        logger.info(f"Processing completed: {successful_count} successful, {failed_count} failed")
+    else:
+        # Process sequentially (original behavior)
+        for d_folder in d_folders:
+            try:
+                success = process_single_d_folder(d_folder, args, output_dir, output_name)
+                if not success:
+                    continue
+            except KeyboardInterrupt:
+                logger.info("\nExtraction interrupted by user.")
+                os._exit(0)
 
 
 if __name__ == "__main__":

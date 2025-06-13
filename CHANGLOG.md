@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0]
+### Added
+- workers arg
+- benchmark script
+
 ## [0.3.0]
 ### Added
 - more args

@@ -186,6 +186,13 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         help="Overwrite existing output file if it exists",
     )
 
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of worker threads for processing spectra (default: 1)",
+    )
+
 
 def add_ms2_specific_args(parser: argparse.ArgumentParser) -> None:
     """Add MS2-specific arguments."""
@@ -365,6 +372,7 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
     logger.info(f"  Intensity Precision: {args.intensity_precision} decimal places")
     logger.info(f"  Keep Empty Spectra: {args.keep_empty_spectra}")
     logger.info(f"  Verbose Logging: {args.verbose}")
+    logger.info(f"  Workers: {args.workers}")
 
     # Log preset-specific settings
     if hasattr(args, "ip2") and args.ip2:

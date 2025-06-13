@@ -666,3 +666,91 @@ def get_ms2_prm_content(
                 continue
 
             yield ms2_spectra
+
+
+def get_ms2_dda_spectra(
+    analysis_dir: str,
+    remove_precursor: bool = False,
+    precursor_peak_width: float = 2.0,
+    batch_size: int = 100,
+    top_n_peaks: Optional[int] = None,
+    min_spectra_intensity: Optional[float] = None,
+    max_spectra_intensity: Optional[float] = None,
+    min_spectra_mz: Optional[float] = None,
+    max_spectra_mz: Optional[float] = None,
+    min_precursor_intensity: Optional[float] = None,
+    max_precursor_intensity: Optional[float] = None,
+    min_precursor_charge: Optional[int] = None,
+    max_precursor_charge: Optional[int] = None,
+    min_precursor_mz: Optional[float] = None,
+    max_precursor_mz: Optional[float] = None,
+    min_precursor_rt: Optional[float] = None,
+    max_precursor_rt: Optional[float] = None,
+    min_precursor_ccs: Optional[float] = None,
+    max_precursor_ccs: Optional[float] = None,
+    min_precursor_neutral_mass: Optional[float] = None,
+    max_precursor_neutral_mass: Optional[float] = None,
+) -> Generator[Ms2Spectra, None, None]:
+    """
+    Combined function that gets TDF data and generates MS2 DDA spectra in one step.
+    
+    This function combines the functionality of get_tdf_df and get_ms2_dda_content
+    to provide a single interface for extracting MS2 spectra from TimsTOF DDA data.
+    
+    Args:
+        analysis_dir: Path to the .d analysis directory
+        remove_precursor: Whether to remove precursor peaks from spectra
+        precursor_peak_width: Width around precursor to remove (if remove_precursor=True)
+        batch_size: Number of precursors to process in each batch
+        top_n_peaks: Maximum number of peaks to keep per spectrum
+        min_spectra_intensity: Minimum intensity for fragment peaks
+        max_spectra_intensity: Maximum intensity for fragment peaks
+        min_spectra_mz: Minimum m/z for fragment peaks
+        max_spectra_mz: Maximum m/z for fragment peaks
+        min_precursor_intensity: Minimum precursor intensity filter
+        max_precursor_intensity: Maximum precursor intensity filter
+        min_precursor_charge: Minimum precursor charge filter
+        max_precursor_charge: Maximum precursor charge filter
+        min_precursor_mz: Minimum precursor m/z filter
+        max_precursor_mz: Maximum precursor m/z filter
+        min_precursor_rt: Minimum precursor retention time filter
+        max_precursor_rt: Maximum precursor retention time filter
+        min_precursor_ccs: Minimum precursor CCS filter
+        max_precursor_ccs: Maximum precursor CCS filter
+        min_precursor_neutral_mass: Minimum precursor neutral mass filter
+        max_precursor_neutral_mass: Maximum precursor neutral mass filter
+    
+    Yields:
+        Ms2Spectra objects containing processed MS2 spectra
+    """
+    
+    # Get filtered TDF dataframe
+    merged_df = get_tdf_df(
+        analysis_dir=analysis_dir,
+        min_precursor_intensity=min_precursor_intensity,
+        max_precursor_intensity=max_precursor_intensity,
+        min_precursor_charge=min_precursor_charge,
+        max_precursor_charge=max_precursor_charge,
+        min_precursor_mz=min_precursor_mz,
+        max_precursor_mz=max_precursor_mz,
+        min_precursor_rt=min_precursor_rt,
+        max_precursor_rt=max_precursor_rt,
+        min_precursor_ccs=min_precursor_ccs,
+        max_precursor_ccs=max_precursor_ccs,
+        min_precursor_neutral_mass=min_precursor_neutral_mass,
+        max_precursor_neutral_mass=max_precursor_neutral_mass,
+    )
+    
+    # Generate MS2 spectra from the filtered dataframe
+    yield from get_ms2_dda_content(
+        analysis_dir=analysis_dir,
+        merged_df=merged_df,
+        remove_precursor=remove_precursor,
+        precursor_peak_width=precursor_peak_width,
+        batch_size=batch_size,
+        top_n_peaks=top_n_peaks,
+        min_spectra_intensity=min_spectra_intensity,
+        max_spectra_intensity=max_spectra_intensity,
+        min_spectra_mz=min_spectra_mz,
+        max_spectra_mz=max_spectra_mz,
+    )
