@@ -471,10 +471,9 @@ def _write_dia_or_prm(
         logger.info(f"Indexing {kind} MS2 windows")
         grouped, total_ms2 = _collect_windowed_ms2(window_iter)
 
-        ms1_frame_ids_in_order = [
-            int(r.Id) for r in frames_df.itertuples() if int(r.MsMsType) == 0
-        ]
-        total_ms1 = len(ms1_frame_ids_in_order) if include_ms1 else 0
+        frame_ids = frames_df["Id"].to_numpy(dtype=np.int64)
+        msms_types = frames_df["MsMsType"].to_numpy(dtype=np.int64)
+        total_ms1 = int((msms_types == 0).sum()) if include_ms1 else 0
         total_spectra = total_ms1 + total_ms2
 
         logger.info(
@@ -488,9 +487,9 @@ def _write_dia_or_prm(
 
         with writer.run(id=Path(analysis_dir).stem):
             with writer.spectrum_list(count=total_spectra):
-                for row in frames_df.itertuples():
-                    frame_id = int(row.Id)
-                    msms_type = int(row.MsMsType)
+                for frame_id_np, msms_type_np in zip(frame_ids, msms_types):
+                    frame_id = int(frame_id_np)
+                    msms_type = int(msms_type_np)
 
                     if msms_type == 0:
                         if not include_ms1:
@@ -526,26 +525,14 @@ def _write_dia_or_prm(
                     for w in windows:
                         iso_mz = float(w.isolation_mz)
                         iso_w = float(w.isolation_width)
-                        if (
-                            min_precursor_mz is not None
-                            and iso_mz < min_precursor_mz
-                        ):
+                        if min_precursor_mz is not None and iso_mz < min_precursor_mz:
                             continue
-                        if (
-                            max_precursor_mz is not None
-                            and iso_mz > max_precursor_mz
-                        ):
+                        if max_precursor_mz is not None and iso_mz > max_precursor_mz:
                             continue
                         rt_s = float(w.rt)
-                        if (
-                            min_precursor_rt is not None
-                            and rt_s < min_precursor_rt
-                        ):
+                        if min_precursor_rt is not None and rt_s < min_precursor_rt:
                             continue
-                        if (
-                            max_precursor_rt is not None
-                            and rt_s > max_precursor_rt
-                        ):
+                        if max_precursor_rt is not None and rt_s > max_precursor_rt:
                             continue
                         # min_peaks=1: narrow PRM isolation windows often
                         # contain only a single mobility scan with a peak.

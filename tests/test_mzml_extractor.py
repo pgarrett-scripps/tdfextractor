@@ -7,7 +7,6 @@ the test suite only requires packages already declared as runtime deps.
 """
 
 import logging
-import os
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -22,7 +21,6 @@ from tdfextractor.mzml_extractor import (
     _resolve_encoding,
     write_mzml_file,
 )
-
 
 DATA_DIR = Path(__file__).parent / "data"
 DDA_D = DATA_DIR / "200ngHeLaPASEF_1min.d"
@@ -51,11 +49,7 @@ def _binary_array_names(spec: ET.Element):
     for bda in spec.iter("{http://psi.hupo.org/ms/mzml}binaryDataArray"):
         for cv in bda.findall("mz:cvParam", MZML_NS):
             nm = cv.attrib.get("name", "")
-            if (
-                "array" in nm
-                and "compression" not in nm
-                and "bit" not in nm
-            ):
+            if "array" in nm and "compression" not in nm and "bit" not in nm:
                 names.append(nm)
                 break
     return names
@@ -118,9 +112,7 @@ class TestHelpers(unittest.TestCase):
         d = _build_compression_dict("zlib", "none", "zstd")
         self.assertEqual(d["m/z array"], "zlib")
         self.assertEqual(d["intensity array"], "none")
-        self.assertEqual(
-            d["mean inverse reduced ion mobility array"], "zstd"
-        )
+        self.assertEqual(d["mean inverse reduced ion mobility array"], "zstd")
 
     def test_build_encoding_dict(self):
         d = _build_encoding_dict(64, 32)
@@ -161,10 +153,7 @@ class _AcquisitionWriterMixin:
             for s in specs:
                 if _ms_level(s) != 1:
                     continue
-                if (
-                    "mean inverse reduced ion mobility array"
-                    in _binary_array_names(s)
-                ):
+                if "mean inverse reduced ion mobility array" in _binary_array_names(s):
                     hits += 1
             self.assertGreater(
                 hits, 0, "no MS1 spectra carried the mean-IM mobility array"
