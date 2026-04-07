@@ -2,6 +2,15 @@
 Package for tdfextractor.
 """
 
-from .utils import get_ms2_dda_content
+__version__ = "0.5.0"
 
-__version__ = "0.4.0"
+from .utils import get_ms2_dda_content, get_ms2_dda_spectra, get_tdf_df
+from .mzml_extractor import write_mzml_file
+
+__all__ = [
+    "__version__",
+    "get_ms2_dda_content",
+    "get_ms2_dda_spectra",
+    "get_tdf_df",
+    "write_mzml_file",
+]
