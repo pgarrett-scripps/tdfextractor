@@ -8,9 +8,9 @@ from typing import Dict, Generator, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from tdfpy import timsdata
-from tdfpy.pandas_tdf import PandasTdf
-from serenipy.ms2 import Ms2Spectra
+from tdfpy import PandasTdf, timsdata_connect
+from tdfpy.timsdata import oneOverK0ToCCSforMz
+from serenipy import Ms2Spectra
 from tqdm import tqdm
 from .constants import PROTON_MASS
 
@@ -285,7 +285,7 @@ def get_tdf_df(
             f"Filtered {filtered_count} precursors by max_precursor_intensity <= {max_precursor_intensity} (remaining: {after_filter})"
         )
 
-    with timsdata.timsdata_connect(analysis_dir) as td:
+    with timsdata_connect(analysis_dir) as td:
         merged_df["OOK0"] = merged_df.apply(
             lambda row: td.scanNumToOneOverK0(int(row["Parent"]), [row["ScanNumber"]])[
                 0
@@ -294,7 +294,7 @@ def get_tdf_df(
         )
 
     merged_df["CCS"] = merged_df.apply(
-        lambda row: timsdata.oneOverK0ToCCSforMz(
+        lambda row: oneOverK0ToCCSforMz(
             row["OOK0"], int(row["Charge"]), row["MonoisotopicMz"]
         ),
         axis=1,
@@ -339,7 +339,7 @@ def get_ms2_dda_content(
     max_spectra_mz: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
-    with timsdata.timsdata_connect(analysis_dir) as td:
+    with timsdata_connect(analysis_dir) as td:
 
         for precursor_batch in batch_iterator(
             input_list=list(merged_df.iterrows()), batch_size=batch_size
@@ -530,7 +530,7 @@ def get_ms2_prm_content(
     
     # TODO: Integrate
 
-    with timsdata.timsdata_connect(analysis_dir) as td:
+    with timsdata_connect(analysis_dir) as td:
         analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
         merged_df = pd.merge(
             PandasTdf(analysis_tdf_path).prm_frame_msms_info,

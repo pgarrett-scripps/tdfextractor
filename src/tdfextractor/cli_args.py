@@ -214,6 +214,16 @@ def add_mgf_specific_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_mzml_specific_args(parser: argparse.ArgumentParser) -> None:
+    """Add mzML-specific arguments."""
+
+    parser.add_argument(
+        "--no-ms1",
+        action="store_true",
+        help="Skip MS1 spectra and write only MS2 PASEF spectra to the mzML file",
+    )
+
+
 def create_ms2_parser() -> argparse.ArgumentParser:
     """Create argument parser for MS2 extractor."""
 
@@ -238,6 +248,20 @@ def create_mgf_parser() -> argparse.ArgumentParser:
 
     add_common_args(parser)
     add_mgf_specific_args(parser)
+
+    return parser
+
+
+def create_mzml_parser() -> argparse.ArgumentParser:
+    """Create argument parser for mzML extractor."""
+
+    parser = argparse.ArgumentParser(
+        description="Extract mzML files from TimsTOF .D folders (uses psims)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    add_common_args(parser)
+    add_mzml_specific_args(parser)
 
     return parser
 

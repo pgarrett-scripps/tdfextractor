@@ -11,7 +11,7 @@ from typing import Optional
 import threading
 import queue
 
-from tdfpy.pandas_tdf import PandasTdf
+from tdfpy import PandasTdf
 from tqdm import tqdm
 
 from .utils import get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
