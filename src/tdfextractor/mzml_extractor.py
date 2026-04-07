@@ -27,6 +27,7 @@ from psims.mzml.writer import MzMLWriter
 from tdfpy import DDA, DIA, PRM, PandasTdf
 from tqdm import tqdm
 
+from .args import EncodingBitWidth, MzmlArgs
 from .cli_args import apply_preset_settings, create_mzml_parser, log_common_args
 from .utils import (
     get_ms1_frames_ids,
@@ -72,13 +73,15 @@ def _resolve_compression(name: str | None) -> str:
         ) from exc
 
 
-def _resolve_encoding(bits: int | None) -> Any:
+def _resolve_encoding(bits: EncodingBitWidth | None) -> Any:
     """Translate a 32/64-bit width to the corresponding numpy dtype."""
 
     if bits is None or bits == 64:
         return np.float64
     if bits == 32:
         return np.float32
+    # Defensive: callers using the type checker can never reach this
+    # branch, but the runtime check protects untyped callers.
     raise ValueError(f"Unsupported encoding bit width: {bits!r}")
 
 
@@ -95,8 +98,8 @@ def _build_compression_dict(
 
 
 def _build_encoding_dict(
-    mz_encoding: int,
-    intensity_encoding: int,
+    mz_encoding: EncodingBitWidth,
+    intensity_encoding: EncodingBitWidth,
 ) -> dict[str, Any]:
     return {
         _MZ_ARRAY: _resolve_encoding(mz_encoding),
@@ -287,33 +290,12 @@ def _iter_dda_ms1(
 def _write_dda(
     *,
     writer: MzMLWriter,
-    analysis_dir: str,
     pd_tdf: PandasTdf,
+    args: MzmlArgs,
     compression: Mapping[str, str],
     encoding: Mapping[str, Any],
-    include_ms1: bool,
-    keep_empty_spectra: bool,
-    remove_precursor: bool,
-    precursor_peak_width: float,
-    batch_size: int,
-    top_n_peaks: int | None,
-    min_spectra_intensity: float | None,
-    max_spectra_intensity: float | None,
-    min_spectra_mz: float | None,
-    max_spectra_mz: float | None,
-    min_precursor_intensity: float | None,
-    max_precursor_intensity: float | None,
-    min_precursor_charge: int | None,
-    max_precursor_charge: int | None,
-    min_precursor_mz: float | None,
-    max_precursor_mz: float | None,
-    min_precursor_rt: float | None,
-    max_precursor_rt: float | None,
-    min_precursor_ccs: float | None,
-    max_precursor_ccs: float | None,
-    min_precursor_neutral_mass: float | None,
-    max_precursor_neutral_mass: float | None,
 ) -> None:
+    analysis_dir = args.analysis_dir
     frames_df = pd_tdf.frames
     precursors_df = pd_tdf.precursors
 
@@ -323,18 +305,18 @@ def _write_dda(
 
     merged_df = get_tdf_df(
         analysis_dir,
-        min_precursor_intensity,
-        max_precursor_intensity,
-        min_precursor_charge,
-        max_precursor_charge,
-        min_precursor_mz,
-        max_precursor_mz,
-        min_precursor_rt,
-        max_precursor_rt,
-        min_precursor_ccs,
-        max_precursor_ccs,
-        min_precursor_neutral_mass,
-        max_precursor_neutral_mass,
+        args.min_precursor_intensity,
+        args.max_precursor_intensity,
+        args.min_precursor_charge,
+        args.max_precursor_charge,
+        args.min_precursor_mz,
+        args.max_precursor_mz,
+        args.min_precursor_rt,
+        args.max_precursor_rt,
+        args.min_precursor_ccs,
+        args.max_precursor_ccs,
+        args.min_precursor_neutral_mass,
+        args.max_precursor_neutral_mass,
     )
 
     logger.info("Extracting MS2 spectra")
@@ -343,32 +325,36 @@ def _write_dda(
         get_ms2_dda_content(
             analysis_dir=analysis_dir,
             merged_df=merged_df,
-            remove_precursor=remove_precursor,
-            precursor_peak_width=precursor_peak_width,
-            batch_size=batch_size,
-            top_n_peaks=top_n_peaks,
-            min_spectra_intensity=min_spectra_intensity,
-            max_spectra_intensity=max_spectra_intensity,
-            min_spectra_mz=min_spectra_mz,
-            max_spectra_mz=max_spectra_mz,
+            remove_precursor=args.remove_precursor,
+            precursor_peak_width=args.precursor_peak_width,
+            batch_size=args.batch_size,
+            top_n_peaks=args.top_n_peaks,
+            min_spectra_intensity=args.min_spectra_intensity,
+            max_spectra_intensity=args.max_spectra_intensity,
+            min_spectra_mz=args.min_spectra_mz,
+            max_spectra_mz=args.max_spectra_mz,
         ),
         total=len(merged_df),
         desc="Reading MS2",
     ):
-        if (not keep_empty_spectra) and len(spectrum.mz_spectra) == 0:
+        if (not args.keep_empty_spectra) and len(spectrum.mz_spectra) == 0:
             continue
         ms2_by_parent.setdefault(int(spectrum.parent_id), []).append(spectrum)
 
     total_ms2 = sum(len(v) for v in ms2_by_parent.values())
-    total_spectra = total_ms2 + (len(ms1_frame_ids) if include_ms1 else 0)
+    total_spectra = total_ms2 + (len(ms1_frame_ids) if args.include_ms1 else 0)
     logger.info(
         f"Writing mzML ({total_spectra} spectra: "
-        f"{len(ms1_frame_ids) if include_ms1 else 0} MS1, {total_ms2} MS2)"
+        f"{len(ms1_frame_ids) if args.include_ms1 else 0} MS1, {total_ms2} MS2)"
     )
 
     with writer.run(id=Path(analysis_dir).stem):
         with writer.spectrum_list(count=total_spectra):
-            ms1_iter = _iter_dda_ms1(analysis_dir, ms1_frame_ids) if include_ms1 else iter(())
+            ms1_iter = (
+                _iter_dda_ms1(analysis_dir, ms1_frame_ids)
+                if args.include_ms1
+                else iter(())
+            )
 
             pbar = tqdm(total=total_spectra, desc="Writing mzML", unit="spectra")
             for frame_id, mz_arr, int_arr, mob_arr, rt_s in ms1_iter:
@@ -440,18 +426,20 @@ def _collect_windowed_ms2(
 def _write_dia_or_prm(
     *,
     writer: MzMLWriter,
-    analysis_dir: str,
     pd_tdf: PandasTdf,
     reader_factory,
+    args: MzmlArgs,
     compression: Mapping[str, str],
     encoding: Mapping[str, Any],
-    include_ms1: bool,
-    keep_empty_spectra: bool,
-    min_precursor_mz: float | None,
-    max_precursor_mz: float | None,
-    min_precursor_rt: float | None,
-    max_precursor_rt: float | None,
 ) -> None:
+    analysis_dir = args.analysis_dir
+    include_ms1 = args.include_ms1
+    keep_empty_spectra = args.keep_empty_spectra
+    min_precursor_mz = args.min_precursor_mz
+    max_precursor_mz = args.max_precursor_mz
+    min_precursor_rt = args.min_precursor_rt
+    max_precursor_rt = args.max_precursor_rt
+
     frames_df = pd_tdf.frames.sort_values("Id").reset_index(drop=True)
 
     with reader_factory(analysis_dir) as reader:
@@ -562,37 +550,7 @@ def _write_dia_or_prm(
 # ---------------------------------------------------------------------------
 
 
-def write_mzml_file(
-    analysis_dir: str,
-    output_file: str | None = None,
-    remove_precursor: bool = False,
-    precursor_peak_width: float = 2.0,
-    batch_size: int = 100,
-    top_n_peaks: int | None = None,
-    min_spectra_intensity: float | None = None,
-    max_spectra_intensity: float | None = None,
-    min_spectra_mz: float | None = None,
-    max_spectra_mz: float | None = None,
-    min_precursor_intensity: float | None = None,
-    max_precursor_intensity: float | None = None,
-    min_precursor_charge: int | None = None,
-    max_precursor_charge: int | None = None,
-    min_precursor_mz: float | None = None,
-    max_precursor_mz: float | None = None,
-    min_precursor_rt: float | None = None,
-    max_precursor_rt: float | None = None,
-    min_precursor_ccs: float | None = None,
-    max_precursor_ccs: float | None = None,
-    min_precursor_neutral_mass: float | None = None,
-    max_precursor_neutral_mass: float | None = None,
-    keep_empty_spectra: bool = False,
-    include_ms1: bool = True,
-    mz_compression: str = "zlib",
-    intensity_compression: str = "zlib",
-    mobility_compression: str = "zlib",
-    mz_encoding: int = 64,
-    intensity_encoding: int = 32,
-):
+def write_mzml_file(args: MzmlArgs) -> None:
     """Write an indexed mzML file from a Bruker .d folder.
 
     Dispatches to the DDA, DIA, or PRM writer based on the TDF metadata.
@@ -600,16 +558,18 @@ def write_mzml_file(
 
     start_time = time.time()
 
-    if output_file is None:
-        output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mzML"
+    analysis_dir = args.analysis_dir
+    output_file = args.output_file or (
+        str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mzML"
+    )
 
     logger.info("Loading TDF metadata")
     pd_tdf = PandasTdf(str(Path(analysis_dir) / "analysis.tdf"))
 
     compression = _build_compression_dict(
-        mz_compression, intensity_compression, mobility_compression
+        args.mz_compression, args.intensity_compression, args.mobility_compression
     )
-    encoding = _build_encoding_dict(mz_encoding, intensity_encoding)
+    encoding = _build_encoding_dict(args.mz_encoding, args.intensity_encoding)
 
     logger.info(f"Writing mzML to {output_file}")
 
@@ -620,64 +580,30 @@ def write_mzml_file(
             logger.info("Detected DDA acquisition")
             _write_dda(
                 writer=writer,
-                analysis_dir=analysis_dir,
                 pd_tdf=pd_tdf,
+                args=args,
                 compression=compression,
                 encoding=encoding,
-                include_ms1=include_ms1,
-                keep_empty_spectra=keep_empty_spectra,
-                remove_precursor=remove_precursor,
-                precursor_peak_width=precursor_peak_width,
-                batch_size=batch_size,
-                top_n_peaks=top_n_peaks,
-                min_spectra_intensity=min_spectra_intensity,
-                max_spectra_intensity=max_spectra_intensity,
-                min_spectra_mz=min_spectra_mz,
-                max_spectra_mz=max_spectra_mz,
-                min_precursor_intensity=min_precursor_intensity,
-                max_precursor_intensity=max_precursor_intensity,
-                min_precursor_charge=min_precursor_charge,
-                max_precursor_charge=max_precursor_charge,
-                min_precursor_mz=min_precursor_mz,
-                max_precursor_mz=max_precursor_mz,
-                min_precursor_rt=min_precursor_rt,
-                max_precursor_rt=max_precursor_rt,
-                min_precursor_ccs=min_precursor_ccs,
-                max_precursor_ccs=max_precursor_ccs,
-                min_precursor_neutral_mass=min_precursor_neutral_mass,
-                max_precursor_neutral_mass=max_precursor_neutral_mass,
             )
         elif pd_tdf.is_dia:
             logger.info("Detected DIA acquisition")
             _write_dia_or_prm(
                 writer=writer,
-                analysis_dir=analysis_dir,
                 pd_tdf=pd_tdf,
                 reader_factory=DIA,
+                args=args,
                 compression=compression,
                 encoding=encoding,
-                include_ms1=include_ms1,
-                keep_empty_spectra=keep_empty_spectra,
-                min_precursor_mz=min_precursor_mz,
-                max_precursor_mz=max_precursor_mz,
-                min_precursor_rt=min_precursor_rt,
-                max_precursor_rt=max_precursor_rt,
             )
         elif pd_tdf.is_prm:
             logger.info("Detected PRM acquisition")
             _write_dia_or_prm(
                 writer=writer,
-                analysis_dir=analysis_dir,
                 pd_tdf=pd_tdf,
                 reader_factory=PRM,
+                args=args,
                 compression=compression,
                 encoding=encoding,
-                include_ms1=include_ms1,
-                keep_empty_spectra=keep_empty_spectra,
-                min_precursor_mz=min_precursor_mz,
-                max_precursor_mz=max_precursor_mz,
-                min_precursor_rt=min_precursor_rt,
-                max_precursor_rt=max_precursor_rt,
             )
         else:
             raise TypeError(
@@ -703,6 +629,8 @@ def main():
 
     apply_preset_settings(logger, args)
     log_common_args(logger, args, "mzML")
+
+    base_args = MzmlArgs.from_namespace(args)
 
     analysis_path = Path(args.analysis_dir)
     if not analysis_path.exists():
@@ -769,37 +697,9 @@ def main():
             continue
 
         try:
-            write_mzml_file(
-                analysis_dir=str(d_folder),
-                output_file=output,
-                remove_precursor=args.remove_precursor,
-                precursor_peak_width=args.precursor_peak_width,
-                batch_size=args.batch_size,
-                top_n_peaks=args.top_n_peaks,
-                min_spectra_intensity=args.min_spectra_intensity,
-                max_spectra_intensity=args.max_spectra_intensity,
-                min_spectra_mz=args.min_spectra_mz,
-                max_spectra_mz=args.max_spectra_mz,
-                min_precursor_intensity=args.min_precursor_intensity,
-                max_precursor_intensity=args.max_precursor_intensity,
-                min_precursor_charge=args.min_precursor_charge,
-                max_precursor_charge=args.max_precursor_charge,
-                min_precursor_mz=args.min_precursor_mz,
-                max_precursor_mz=args.max_precursor_mz,
-                min_precursor_rt=args.min_precursor_rt,
-                max_precursor_rt=args.max_precursor_rt,
-                min_precursor_ccs=args.min_precursor_ccs,
-                max_precursor_ccs=args.max_precursor_ccs,
-                min_precursor_neutral_mass=args.min_precursor_neutral_mass,
-                max_precursor_neutral_mass=args.max_precursor_neutral_mass,
-                keep_empty_spectra=args.keep_empty_spectra,
-                include_ms1=not args.no_ms1,
-                mz_compression=args.mz_compression,
-                intensity_compression=args.intensity_compression,
-                mobility_compression=args.mobility_compression,
-                mz_encoding=args.mz_encoding,
-                intensity_encoding=args.intensity_encoding,
-            )
+            base_args.analysis_dir = str(d_folder)
+            base_args.output_file = output
+            write_mzml_file(base_args)
             logger.info("mzML extraction completed successfully!")
         except Exception as e:
             logger.error(f"Error during mzML extraction: {e}... skipping {d_folder}")

@@ -13,6 +13,7 @@ from pathlib import Path
 from tdfpy import PandasTdf
 from tqdm import tqdm
 
+from .args import Ms2Args
 from .cli_args import apply_preset_settings, create_ms2_parser, log_common_args
 from .utils import get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
 
@@ -20,41 +21,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def generate_header(
-    analysis_dir: str,
-    remove_precursor: bool = False,
-    precursor_peak_width: float = 2.0,
-    batch_size: int = 100,
-    top_n_peaks: int | None = None,
-    min_spectra_intensity: float | None = None,
-    max_spectra_intensity: float | None = None,
-    min_spectra_mz: float | None = None,
-    max_spectra_mz: float | None = None,
-    min_precursor_intensity: float | None = None,
-    max_precursor_intensity: float | None = None,
-    min_precursor_charge: int | None = None,
-    max_precursor_charge: int | None = None,
-    min_precursor_mz: float | None = None,
-    max_precursor_mz: float | None = None,
-    min_precursor_rt: float | None = None,
-    max_precursor_rt: float | None = None,
-    min_precursor_ccs: float | None = None,
-    max_precursor_ccs: float | None = None,
-    min_precursor_neutral_mass: float | None = None,
-    max_precursor_neutral_mass: float | None = None,
-    mz_precision: int | None = 5,
-    intensity_precision: int | None = 0,
-):
-    """
-    Generates a header string for MS2 data using information from the analysis file.
+def generate_header(args: Ms2Args) -> str:
+    """Generate a header string for MS2 data using info from the analysis file.
 
     Args:
-        analysis_dir (str): The directory path where the analysis file `analysis.tdf` is located.
-        min_intensity (float): The minimum intensity of MS/MS spectra to be considered.
-        remove_charge1 (bool): Indicates whether to exclude precursors with a charge of 1.
-        remove_empty_spectra (bool): Indicates whether to exclude MS/MS spectra with no spectra values.
-        include_spectra (bool): Indicates whether to include the actual MS/MS spectra in the output.
-        resolution (float): The resolution of the MS/MS spectra.
+        args: Ms2Args dataclass holding the analysis directory and all
+            extractor settings to record in the header.
 
     Returns:
         str: The generated header string for MS2 data.
@@ -63,6 +35,7 @@ def generate_header(
         TypeError: If the TDF format is unknown.
     """
 
+    analysis_dir = args.analysis_dir
     pd_tdf = PandasTdf(str(Path(analysis_dir) / "analysis.tdf"))
 
     if pd_tdf.is_dda:
@@ -123,45 +96,36 @@ def generate_header(
         "H\tMonoIsotopic PrecMz\tTrue\n"
     )
 
+    def _or_none(value):
+        return value if value is not None else "None"
+
     ms2_header = MS2_HEADER.format(
         version="TDF-Extractor",
         date_of_creation=str(datetime.now().strftime("%B %d, %Y %H:%M")),
-        min_spectra_intensity=(
-            min_spectra_intensity if min_spectra_intensity is not None else "None"
-        ),
-        max_spectra_intensity=(
-            max_spectra_intensity if max_spectra_intensity is not None else "None"
-        ),
-        min_spectra_mz=min_spectra_mz if min_spectra_mz is not None else "None",
-        max_spectra_mz=max_spectra_mz if max_spectra_mz is not None else "None",
-        min_precursor_intensity=(
-            min_precursor_intensity if min_precursor_intensity is not None else "None"
-        ),
-        max_precursor_intensity=(
-            max_precursor_intensity if max_precursor_intensity is not None else "None"
-        ),
-        remove_precursor=remove_precursor,
-        precursor_peak_width=precursor_peak_width,
-        batch_size=batch_size,
-        top_n_peaks=top_n_peaks if top_n_peaks is not None else "None",
-        min_precursor_charge=(min_precursor_charge if min_precursor_charge is not None else "None"),
-        max_precursor_charge=(max_precursor_charge if max_precursor_charge is not None else "None"),
-        min_precursor_mz=min_precursor_mz if min_precursor_mz is not None else "None",
-        max_precursor_mz=max_precursor_mz if max_precursor_mz is not None else "None",
-        min_precursor_rt=min_precursor_rt if min_precursor_rt is not None else "None",
-        max_precursor_rt=max_precursor_rt if max_precursor_rt is not None else "None",
-        min_precursor_ccs=(min_precursor_ccs if min_precursor_ccs is not None else "None"),
-        max_precursor_ccs=(max_precursor_ccs if max_precursor_ccs is not None else "None"),
-        min_precursor_neutral_mass=(
-            min_precursor_neutral_mass if min_precursor_neutral_mass is not None else "None"
-        ),
-        max_precursor_neutral_mass=(
-            max_precursor_neutral_mass if max_precursor_neutral_mass is not None else "None"
-        ),
+        min_spectra_intensity=_or_none(args.min_spectra_intensity),
+        max_spectra_intensity=_or_none(args.max_spectra_intensity),
+        min_spectra_mz=_or_none(args.min_spectra_mz),
+        max_spectra_mz=_or_none(args.max_spectra_mz),
+        min_precursor_intensity=_or_none(args.min_precursor_intensity),
+        max_precursor_intensity=_or_none(args.max_precursor_intensity),
+        remove_precursor=args.remove_precursor,
+        precursor_peak_width=args.precursor_peak_width,
+        batch_size=args.batch_size,
+        top_n_peaks=_or_none(args.top_n_peaks),
+        min_precursor_charge=_or_none(args.min_precursor_charge),
+        max_precursor_charge=_or_none(args.max_precursor_charge),
+        min_precursor_mz=_or_none(args.min_precursor_mz),
+        max_precursor_mz=_or_none(args.max_precursor_mz),
+        min_precursor_rt=_or_none(args.min_precursor_rt),
+        max_precursor_rt=_or_none(args.max_precursor_rt),
+        min_precursor_ccs=_or_none(args.min_precursor_ccs),
+        max_precursor_ccs=_or_none(args.max_precursor_ccs),
+        min_precursor_neutral_mass=_or_none(args.min_precursor_neutral_mass),
+        max_precursor_neutral_mass=_or_none(args.max_precursor_neutral_mass),
         method=method,
         resolution=120000,
-        mz_precision=mz_precision,
-        intensity_precision=intensity_precision,
+        mz_precision=args.mz_precision,
+        intensity_precision=args.intensity_precision,
         first_scan=first_scan,
         last_scan=last_scan,
     )
@@ -169,80 +133,32 @@ def generate_header(
     return ms2_header
 
 
-def write_ms2_file(
-    analysis_dir: str,
-    output_file: str | None = None,
-    remove_precursor: bool = False,
-    precursor_peak_width: float = 2.0,
-    batch_size: int = 100,
-    top_n_peaks: int | None = None,
-    min_spectra_intensity: float | None = None,
-    max_spectra_intensity: float | None = None,
-    min_spectra_mz: float | None = None,
-    max_spectra_mz: float | None = None,
-    min_precursor_intensity: float | None = None,
-    max_precursor_intensity: float | None = None,
-    min_precursor_charge: int | None = None,
-    max_precursor_charge: int | None = None,
-    min_precursor_mz: float | None = None,
-    max_precursor_mz: float | None = None,
-    min_precursor_rt: float | None = None,
-    max_precursor_rt: float | None = None,
-    min_precursor_ccs: float | None = None,
-    max_precursor_ccs: float | None = None,
-    min_precursor_neutral_mass: float | None = None,
-    max_precursor_neutral_mass: float | None = None,
-    mz_precision: int | None = 5,
-    intensity_precision: int | None = 0,
-    keep_empty_spectra: bool = False,
-):
+def write_ms2_file(args: Ms2Args) -> None:
 
     start_time = time.time()
 
-    if output_file is None:
-        output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + ".ms2"
+    analysis_dir = args.analysis_dir
+    output_file = args.output_file or (
+        str(Path(analysis_dir) / Path(analysis_dir).stem) + ".ms2"
+    )
 
     logger.info("Creating Ms2 Header")
-    ms2_header = generate_header(
-        analysis_dir=analysis_dir,
-        remove_precursor=remove_precursor,
-        precursor_peak_width=precursor_peak_width,
-        batch_size=batch_size,
-        top_n_peaks=top_n_peaks,
-        min_spectra_intensity=min_spectra_intensity,
-        max_spectra_intensity=max_spectra_intensity,
-        min_spectra_mz=min_spectra_mz,
-        max_spectra_mz=max_spectra_mz,
-        min_precursor_intensity=min_precursor_intensity,
-        max_precursor_intensity=max_precursor_intensity,
-        min_precursor_charge=min_precursor_charge,
-        max_precursor_charge=max_precursor_charge,
-        min_precursor_mz=min_precursor_mz,
-        max_precursor_mz=max_precursor_mz,
-        min_precursor_rt=min_precursor_rt,
-        max_precursor_rt=max_precursor_rt,
-        min_precursor_ccs=min_precursor_ccs,
-        max_precursor_ccs=max_precursor_ccs,
-        min_precursor_neutral_mass=min_precursor_neutral_mass,
-        max_precursor_neutral_mass=max_precursor_neutral_mass,
-        mz_precision=mz_precision,
-        intensity_precision=intensity_precision,
-    )
+    ms2_header = generate_header(args)
 
     merged_df = get_tdf_df(
         analysis_dir,
-        min_precursor_intensity,
-        max_precursor_intensity,
-        min_precursor_charge,
-        max_precursor_charge,
-        min_precursor_mz,
-        max_precursor_mz,
-        min_precursor_rt,
-        max_precursor_rt,
-        min_precursor_ccs,
-        max_precursor_ccs,
-        min_precursor_neutral_mass,
-        max_precursor_neutral_mass,
+        args.min_precursor_intensity,
+        args.max_precursor_intensity,
+        args.min_precursor_charge,
+        args.max_precursor_charge,
+        args.min_precursor_mz,
+        args.max_precursor_mz,
+        args.min_precursor_rt,
+        args.max_precursor_rt,
+        args.min_precursor_ccs,
+        args.max_precursor_ccs,
+        args.min_precursor_neutral_mass,
+        args.max_precursor_neutral_mass,
     )
 
     logger.info("Generating Ms2 Spectra (producer-consumer mode)")
@@ -253,14 +169,14 @@ def write_ms2_file(
             ms2_spectra = get_ms2_dda_content(
                 analysis_dir=analysis_dir,
                 merged_df=merged_df,
-                remove_precursor=remove_precursor,
-                precursor_peak_width=precursor_peak_width,
-                batch_size=batch_size,
-                top_n_peaks=top_n_peaks,
-                min_spectra_intensity=min_spectra_intensity,
-                max_spectra_intensity=max_spectra_intensity,
-                min_spectra_mz=min_spectra_mz,
-                max_spectra_mz=max_spectra_mz,
+                remove_precursor=args.remove_precursor,
+                precursor_peak_width=args.precursor_peak_width,
+                batch_size=args.batch_size,
+                top_n_peaks=args.top_n_peaks,
+                min_spectra_intensity=args.min_spectra_intensity,
+                max_spectra_intensity=args.max_spectra_intensity,
+                min_spectra_mz=args.min_spectra_mz,
+                max_spectra_mz=args.max_spectra_mz,
             )
             for spectrum in ms2_spectra:
                 spectra_queue.put(spectrum)
@@ -279,13 +195,13 @@ def write_ms2_file(
 
                     pbar.update(1)
 
-                    if len(ms2_spectra.mz_spectra) == 0 and keep_empty_spectra is False:
+                    if len(ms2_spectra.mz_spectra) == 0 and args.keep_empty_spectra is False:
                         continue
 
                     file.write(
                         ms2_spectra.serialize(
-                            mz_precision=mz_precision,
-                            intensity_precision=intensity_precision,
+                            mz_precision=args.mz_precision,
+                            intensity_precision=args.intensity_precision,
                         )
                     )
 
@@ -320,6 +236,8 @@ def main():
 
     # Log all arguments being used
     log_common_args(logger, args, "MS2")
+
+    base_args = Ms2Args.from_namespace(args)
 
     # Validate input directory
     analysis_path = Path(args.analysis_dir)
@@ -401,31 +319,9 @@ def main():
             continue
 
         try:
-            write_ms2_file(
-                analysis_dir=str(d_folder),
-                output_file=output,
-                remove_precursor=args.remove_precursor,
-                precursor_peak_width=args.precursor_peak_width,
-                batch_size=args.batch_size,
-                top_n_peaks=args.top_n_peaks,
-                min_spectra_intensity=args.min_spectra_intensity,
-                max_spectra_intensity=args.max_spectra_intensity,
-                min_spectra_mz=args.min_spectra_mz,
-                max_spectra_mz=args.max_spectra_mz,
-                min_precursor_intensity=args.min_precursor_intensity,
-                max_precursor_intensity=args.max_precursor_intensity,
-                min_precursor_charge=args.min_precursor_charge,
-                max_precursor_charge=args.max_precursor_charge,
-                min_precursor_mz=args.min_precursor_mz,
-                max_precursor_mz=args.max_precursor_mz,
-                min_precursor_rt=args.min_precursor_rt,
-                max_precursor_rt=args.max_precursor_rt,
-                min_precursor_ccs=args.min_precursor_ccs,
-                max_precursor_ccs=args.max_precursor_ccs,
-                min_precursor_neutral_mass=args.min_precursor_neutral_mass,
-                max_precursor_neutral_mass=args.max_precursor_neutral_mass,
-                keep_empty_spectra=args.keep_empty_spectra,
-            )
+            base_args.analysis_dir = str(d_folder)
+            base_args.output_file = output
+            write_ms2_file(base_args)
             logger.info("MS2 extraction completed successfully!")
         except Exception as e:
             logger.error(f"Error during Ms2 extraction: {e}... skipping {d_folder}")

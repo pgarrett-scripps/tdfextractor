@@ -12,61 +12,38 @@ from pathlib import Path
 
 from tqdm import tqdm
 
+from .args import MgfArgs
 from .cli_args import apply_preset_settings, create_mgf_parser, log_common_args
 from .utils import get_ms2_dda_content, get_tdf_df
 
 logger = logging.getLogger(__name__)
 
 
-def write_mgf_file(
-    analysis_dir: str,
-    output_file: str | None = None,
-    remove_precursor: bool = False,
-    precursor_peak_width: float = 2.0,
-    batch_size: int = 100,
-    top_n_peaks: int | None = None,
-    min_spectra_intensity: float | None = None,
-    max_spectra_intensity: float | None = None,
-    min_spectra_mz: float | None = None,
-    max_spectra_mz: float | None = None,
-    min_precursor_intensity: float | None = None,
-    max_precursor_intensity: float | None = None,
-    min_precursor_charge: int | None = None,
-    max_precursor_charge: int | None = None,
-    min_precursor_mz: float | None = None,
-    max_precursor_mz: float | None = None,
-    min_precursor_rt: float | None = None,
-    max_precursor_rt: float | None = None,
-    min_precursor_ccs: float | None = None,
-    max_precursor_ccs: float | None = None,
-    min_precursor_neutral_mass: float | None = None,
-    max_precursor_neutral_mass: float | None = None,
-    mz_precision: int | None = 5,
-    intensity_precision: int | None = 0,
-    keep_empty_spectra: bool = False,
-):
+def write_mgf_file(args: MgfArgs) -> None:
 
     start_time = time.time()
 
-    if output_file is None:
-        output_file = str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mgf"
+    analysis_dir = args.analysis_dir
+    output_file = args.output_file or (
+        str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mgf"
+    )
 
     spectra_queue = queue.Queue(maxsize=100)
 
     merged_df = get_tdf_df(
         analysis_dir,
-        min_precursor_intensity,
-        max_precursor_intensity,
-        min_precursor_charge,
-        max_precursor_charge,
-        min_precursor_mz,
-        max_precursor_mz,
-        min_precursor_rt,
-        max_precursor_rt,
-        min_precursor_ccs,
-        max_precursor_ccs,
-        min_precursor_neutral_mass,
-        max_precursor_neutral_mass,
+        args.min_precursor_intensity,
+        args.max_precursor_intensity,
+        args.min_precursor_charge,
+        args.max_precursor_charge,
+        args.min_precursor_mz,
+        args.max_precursor_mz,
+        args.min_precursor_rt,
+        args.max_precursor_rt,
+        args.min_precursor_ccs,
+        args.max_precursor_ccs,
+        args.min_precursor_neutral_mass,
+        args.max_precursor_neutral_mass,
     )
 
     def producer():
@@ -74,14 +51,14 @@ def write_mgf_file(
             ms2_spectra = get_ms2_dda_content(
                 analysis_dir=analysis_dir,
                 merged_df=merged_df,
-                remove_precursor=remove_precursor,
-                precursor_peak_width=precursor_peak_width,
-                batch_size=batch_size,
-                top_n_peaks=top_n_peaks,
-                min_spectra_intensity=min_spectra_intensity,
-                max_spectra_intensity=max_spectra_intensity,
-                min_spectra_mz=min_spectra_mz,
-                max_spectra_mz=max_spectra_mz,
+                remove_precursor=args.remove_precursor,
+                precursor_peak_width=args.precursor_peak_width,
+                batch_size=args.batch_size,
+                top_n_peaks=args.top_n_peaks,
+                min_spectra_intensity=args.min_spectra_intensity,
+                max_spectra_intensity=args.max_spectra_intensity,
+                min_spectra_mz=args.min_spectra_mz,
+                max_spectra_mz=args.max_spectra_mz,
             )
             for spectrum in ms2_spectra:
                 spectra_queue.put(spectrum)
@@ -104,7 +81,7 @@ def write_mgf_file(
 
                     pbar.update(1)
 
-                    if len(spectrum.mz_spectra) == 0 and keep_empty_spectra is False:
+                    if len(spectrum.mz_spectra) == 0 and args.keep_empty_spectra is False:
                         continue
 
                     mgf_lines = []
@@ -117,12 +94,12 @@ def write_mgf_file(
                     mgf_lines.append(f"RTINSECONDS={spectrum.rt:.2f}")
                     # Pepmass is actually mz? huh?
                     mgf_lines.append(
-                        f"PEPMASS={spectrum.mz:.6f} {spectrum.prec_intensity:.{intensity_precision}f}"
+                        f"PEPMASS={spectrum.mz:.6f} {spectrum.prec_intensity:.{args.intensity_precision}f}"
                     )
                     mgf_lines.append(f"CHARGE={spectrum.charge}+")
                     for mz, intensity in zip(spectrum.mz_spectra, spectrum.intensity_spectra):
                         mgf_lines.append(
-                            f"{mz:.{mz_precision}f} {intensity:.{intensity_precision}f}"
+                            f"{mz:.{args.mz_precision}f} {intensity:.{args.intensity_precision}f}"
                         )
                     mgf_lines.append("END IONS")
                     file.write("\n".join(mgf_lines) + "\n\n")
@@ -139,8 +116,12 @@ def write_mgf_file(
     logger.info(f"Total Time: {total_time:.2f} seconds")
 
 
-def process_single_d_folder(d_folder, args, output_dir, output_name):
-    """Process a single .d folder with error handling."""
+def process_single_d_folder(d_folder, cli_ns, output_dir, output_name):
+    """Process a single .d folder with error handling.
+
+    ``cli_ns`` is the raw argparse Namespace; a fresh :class:`MgfArgs` is
+    built per call so worker threads never share mutable state.
+    """
     try:
         if not d_folder.is_dir():
             logger.error(f"Path is not a directory: {d_folder}")
@@ -161,35 +142,14 @@ def process_single_d_folder(d_folder, args, output_dir, output_name):
         output = os.path.join(_output_dir, _output_name)
         logger.info(f"Output file: {output}")
 
-        if not args.overwrite and Path(output).exists():
+        if not cli_ns.overwrite and Path(output).exists():
             logger.warning(f"Output file {output} already exists. Skipping...")
             return True
 
-        write_mgf_file(
-            analysis_dir=str(d_folder),
-            output_file=output,
-            remove_precursor=args.remove_precursor,
-            precursor_peak_width=args.precursor_peak_width,
-            batch_size=args.batch_size,
-            top_n_peaks=args.top_n_peaks,
-            min_spectra_intensity=args.min_spectra_intensity,
-            max_spectra_intensity=args.max_spectra_intensity,
-            min_spectra_mz=args.min_spectra_mz,
-            max_spectra_mz=args.max_spectra_mz,
-            min_precursor_intensity=args.min_precursor_intensity,
-            max_precursor_intensity=args.max_precursor_intensity,
-            min_precursor_charge=args.min_precursor_charge,
-            max_precursor_charge=args.max_precursor_charge,
-            min_precursor_mz=args.min_precursor_mz,
-            max_precursor_mz=args.max_precursor_mz,
-            min_precursor_rt=args.min_precursor_rt,
-            max_precursor_rt=args.max_precursor_rt,
-            min_precursor_ccs=args.min_precursor_ccs,
-            max_precursor_ccs=args.max_precursor_ccs,
-            min_precursor_neutral_mass=args.min_precursor_neutral_mass,
-            max_precursor_neutral_mass=args.max_precursor_neutral_mass,
-            keep_empty_spectra=args.keep_empty_spectra,
-        )
+        mgf_args = MgfArgs.from_namespace(cli_ns)
+        mgf_args.analysis_dir = str(d_folder)
+        mgf_args.output_file = output
+        write_mgf_file(mgf_args)
         logger.info(f"MGF extraction completed successfully for {d_folder}!")
         return True
     except Exception as e:
