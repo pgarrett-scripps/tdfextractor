@@ -157,15 +157,15 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mz-precision",
         type=int,
-        default=None,
-        help="Number of decimal places for m/z values (default: 4)",
+        default=5,
+        help="Number of decimal places for m/z values",
     )
 
     parser.add_argument(
         "--intensity-precision",
         type=int,
-        default=None,
-        help="Number of decimal places for intensity values (default: 0)",
+        default=0,
+        help="Number of decimal places for intensity values",
     )
 
     parser.add_argument(
@@ -250,6 +250,10 @@ def add_mzml_specific_args(parser: argparse.ArgumentParser) -> None:
             "array written alongside MS1 spectra."
         ),
     )
+    # The two encoding flags below correspond to the
+    # ``tdfextractor.args.EncodingBitWidth`` Literal type. argparse cannot
+    # consume a Literal directly, so the runtime constraint lives in
+    # ``choices`` while the static type lives on :class:`MzmlArgs`.
     parser.add_argument(
         "--mz-encoding",
         type=int,

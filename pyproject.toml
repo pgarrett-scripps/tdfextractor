@@ -83,6 +83,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: end-to-end extractor tests that read .d folders. Run with `pytest -m \"not slow\"` to skip.",
+]
 
 [tool.ruff]
 line-length = 100
