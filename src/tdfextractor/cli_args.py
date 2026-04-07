@@ -223,6 +223,53 @@ def add_mzml_specific_args(parser: argparse.ArgumentParser) -> None:
         help="Skip MS1 spectra and write only MS2 PASEF spectra to the mzML file",
     )
 
+    _COMPRESSORS = [
+        "none",
+        "zlib",
+        "zstd",
+        "numpress-linear",
+        "numpress-slof",
+        "numpress-pic",
+    ]
+    parser.add_argument(
+        "--mz-compression",
+        choices=_COMPRESSORS,
+        default="zlib",
+        help=(
+            "Compression for m/z arrays. zstd requires zstandard; numpress-* "
+            "requires pynumpress."
+        ),
+    )
+    parser.add_argument(
+        "--intensity-compression",
+        choices=_COMPRESSORS,
+        default="zlib",
+        help="Compression for intensity arrays.",
+    )
+    parser.add_argument(
+        "--mobility-compression",
+        choices=_COMPRESSORS,
+        default="zlib",
+        help=(
+            "Compression for the per-peak mean inverse reduced ion mobility "
+            "array written alongside MS1 spectra."
+        ),
+    )
+    parser.add_argument(
+        "--mz-encoding",
+        type=int,
+        choices=[32, 64],
+        default=64,
+        help="Bit width for m/z array values (default: 64).",
+    )
+    parser.add_argument(
+        "--intensity-encoding",
+        type=int,
+        choices=[32, 64],
+        default=32,
+        help="Bit width for intensity array values (default: 32).",
+    )
+
 
 def create_ms2_parser() -> argparse.ArgumentParser:
     """Create argument parser for MS2 extractor."""
@@ -404,3 +451,17 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
 
     if hasattr(args, "casanovo") and args.casanovo:
         logger.info(f"  Casanovo Preset: {args.casanovo}")
+
+    # mzML-only knobs
+    if hasattr(args, "no_ms1"):
+        logger.info(f"  Include MS1: {not args.no_ms1}")
+    if hasattr(args, "mz_compression"):
+        logger.info(f"  m/z Compression: {args.mz_compression}")
+    if hasattr(args, "intensity_compression"):
+        logger.info(f"  Intensity Compression: {args.intensity_compression}")
+    if hasattr(args, "mobility_compression"):
+        logger.info(f"  Mobility Compression: {args.mobility_compression}")
+    if hasattr(args, "mz_encoding"):
+        logger.info(f"  m/z Encoding: {args.mz_encoding}-bit")
+    if hasattr(args, "intensity_encoding"):
+        logger.info(f"  Intensity Encoding: {args.intensity_encoding}-bit")
