@@ -18,6 +18,11 @@ All notable changes to this project will be documented in this file.
 - CLI defaults for `--mz-precision` / `--intensity-precision` are now `5` /
   `0` to match the dataclass defaults (previously `None`, downstream code
   treated `None` as 5/0 anyway, so behavior is unchanged for CLI users).
+- mzML extractor: `--min-precursor-rt` / `--max-precursor-rt` now also bound
+  the MS1 frames written to the mzML file. Previously these flags only
+  filtered MS2 spectra/windows, leaving every MS1 frame in the file
+  regardless of the RT window. The new behavior produces a coherent RT-
+  bounded slice of the run for both DDA and DIA/PRM acquisitions.
 
 ### Added
 - New `tdfextractor.args` module exposing `BaseExtractorArgs`, `Ms2Args`,
