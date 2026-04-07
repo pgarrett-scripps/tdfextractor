@@ -335,7 +335,7 @@ def apply_preset_settings(logger, args: argparse.Namespace) -> None:
         # Set Casanovo specific defaults
 
         args.remove_precursor = True
-        
+
         if args.precursor_peak_width is not None:
             logger.warning(
                 f"Casanovo preset overridden... setting precursor_peak_width to {args.precursor_peak_width}"

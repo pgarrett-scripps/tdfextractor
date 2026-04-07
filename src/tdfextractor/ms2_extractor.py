@@ -4,18 +4,18 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 
 import logging
 import os
+import queue
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-import threading
-import queue
 
 from tdfpy import PandasTdf
 from tqdm import tqdm
 
+from .cli_args import apply_preset_settings, create_ms2_parser, log_common_args
 from .utils import get_ms2_dda_content, get_tdf_df, map_precursor_to_ip2_scan_number
-from .cli_args import create_ms2_parser, apply_preset_settings, log_common_args
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -127,7 +127,7 @@ def generate_header(
     )
 
     ms2_header = MS2_HEADER.format(
-        version='TDF-Extractor',
+        version="TDF-Extractor",
         date_of_creation=str(datetime.now().strftime("%B %d, %Y %H:%M")),
         min_spectra_intensity=(
             min_spectra_intensity if min_spectra_intensity is not None else "None"
@@ -257,7 +257,7 @@ def write_ms2_file(
         min_precursor_ccs,
         max_precursor_ccs,
         min_precursor_neutral_mass,
-        max_precursor_neutral_mass
+        max_precursor_neutral_mass,
     )
 
     logger.info("Generating Ms2 Spectra (producer-consumer mode)")
@@ -285,7 +285,9 @@ def write_ms2_file(
     def consumer():
         with open(output_file, "w", encoding="UTF-8") as file:
             file.write(ms2_header)
-            with tqdm(desc="Writing MS2 Spectra", unit="spectra", total=len(merged_df)) as pbar:
+            with tqdm(
+                desc="Writing MS2 Spectra", unit="spectra", total=len(merged_df)
+            ) as pbar:
                 while True:
                     ms2_spectra = spectra_queue.get()
 
@@ -297,10 +299,12 @@ def write_ms2_file(
                     if len(ms2_spectra.mz_spectra) == 0 and keep_empty_spectra is False:
                         continue
 
-                    file.write(ms2_spectra.serialize(
-                        mz_precision=mz_precision,
-                        intensity_precision=intensity_precision,
-                    ))
+                    file.write(
+                        ms2_spectra.serialize(
+                            mz_precision=mz_precision,
+                            intensity_precision=intensity_precision,
+                        )
+                    )
 
     producer_thread = threading.Thread(target=producer)
     consumer_thread = threading.Thread(target=consumer)
@@ -313,11 +317,12 @@ def write_ms2_file(
     total_time = round(time.time() - start_time, 2)
     logger.info(f"Total Time: {total_time:.2f} seconds")
 
+
 def main():
     """
     Command-line interface for MGF extraction from TimsTOF data.
     """
-    
+
     parser = create_ms2_parser()
     args = parser.parse_args()
 
@@ -415,7 +420,6 @@ def main():
             continue
 
         try:
-
             write_ms2_file(
                 analysis_dir=str(d_folder),
                 output_file=output,

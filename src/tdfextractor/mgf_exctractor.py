@@ -4,19 +4,20 @@ ms2_extractor defines functions for generating ms2 files from DDA and PRM based 
 
 import logging
 import os
-import time
-import threading
 import queue
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
 
+from .cli_args import apply_preset_settings, create_mgf_parser, log_common_args
 from .utils import get_ms2_dda_content, get_tdf_df
-from .cli_args import create_mgf_parser, apply_preset_settings, log_common_args
 
 logger = logging.getLogger(__name__)
+
 
 def write_mgf_file(
     analysis_dir: str,
@@ -96,8 +97,8 @@ def write_mgf_file(
             ) as pbar:
                 # https://www.matrixscience.com/help/data_file_help.html
                 header_lines = []
-                header_lines.append(f"INSTRUMENT=TimsTOF")
-                header_lines.append(f"MASS=Mono")
+                header_lines.append("INSTRUMENT=TimsTOF")
+                header_lines.append("MASS=Mono")
 
                 while True:
                     spectrum = spectra_queue.get()
@@ -131,7 +132,6 @@ def write_mgf_file(
                     mgf_lines.append("END IONS")
                     file.write("\n".join(mgf_lines) + "\n\n")
 
-    
     producer_thread = threading.Thread(target=producer)
     consumer_thread = threading.Thread(target=consumer)
 
@@ -202,6 +202,7 @@ def process_single_d_folder(d_folder, args, output_dir, output_name):
     except Exception as e:
         logger.error(f"Error during MGF extraction for {d_folder}: {e}")
         return False
+
 
 def main():
     """
@@ -278,19 +279,23 @@ def main():
 
     # Process .d folders with multiple workers if specified
     if len(d_folders) > 1 and args.workers > 1:
-        logger.info(f"Processing {len(d_folders)} .d folders using {args.workers} workers...")
-        
+        logger.info(
+            f"Processing {len(d_folders)} .d folders using {args.workers} workers..."
+        )
+
         successful_count = 0
         failed_count = 0
-        
+
         try:
             with ThreadPoolExecutor(max_workers=args.workers) as executor:
                 # Submit all jobs
                 future_to_folder = {
-                    executor.submit(process_single_d_folder, d_folder, args, output_dir, output_name): d_folder
+                    executor.submit(
+                        process_single_d_folder, d_folder, args, output_dir, output_name
+                    ): d_folder
                     for d_folder in d_folders
                 }
-                
+
                 # Process completed jobs
                 for future in as_completed(future_to_folder):
                     d_folder = future_to_folder[future]
@@ -306,13 +311,17 @@ def main():
         except KeyboardInterrupt:
             logger.info("\nExtraction interrupted by user.")
             os._exit(0)
-            
-        logger.info(f"Processing completed: {successful_count} successful, {failed_count} failed")
+
+        logger.info(
+            f"Processing completed: {successful_count} successful, {failed_count} failed"
+        )
     else:
         # Process sequentially (original behavior)
         for d_folder in d_folders:
             try:
-                success = process_single_d_folder(d_folder, args, output_dir, output_name)
+                success = process_single_d_folder(
+                    d_folder, args, output_dir, output_name
+                )
                 if not success:
                     continue
             except KeyboardInterrupt:

@@ -8,10 +8,11 @@ from typing import Dict, Generator, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from serenipy import Ms2Spectra
 from tdfpy import PandasTdf, timsdata_connect
 from tdfpy.timsdata import oneOverK0ToCCSforMz
-from serenipy import Ms2Spectra
 from tqdm import tqdm
+
 from .constants import PROTON_MASS
 
 
@@ -321,7 +322,7 @@ def get_tdf_df(
     final_rows = len(merged_df)
     total_filtered = initial_rows - final_rows
     logging.info(
-        f"Total precursors filtered: {total_filtered} ({(total_filtered/initial_rows)*100:.1f}%), Final count: {final_rows}"
+        f"Total precursors filtered: {total_filtered} ({(total_filtered / initial_rows) * 100:.1f}%), Final count: {final_rows}"
     )
     return merged_df
 
@@ -340,7 +341,6 @@ def get_ms2_dda_content(
 ) -> Generator[Ms2Spectra, None, None]:
 
     with timsdata_connect(analysis_dir) as td:
-
         for precursor_batch in batch_iterator(
             input_list=list(merged_df.iterrows()), batch_size=batch_size
         ):
@@ -353,7 +353,6 @@ def get_ms2_dda_content(
             )
 
             for _, precursor_row in precursor_batch:
-
                 precursor_id = int(precursor_row["Id_Precursor"])
                 parent_id = int(precursor_row["Parent"])
                 charge = int(precursor_row["Charge"])
@@ -421,7 +420,6 @@ def get_ms2_dda_content(
 
                 # Apply min_intensity filter
                 if min_spectra_intensity is not None:
-
                     if (
                         isinstance(min_spectra_intensity, float)
                         and 0.0 <= min_spectra_intensity <= 1.0
@@ -479,7 +477,6 @@ def get_ms2_dda_content(
                     intensity_array = intensity_array[precursor_mask]
 
                 if top_n_peaks is not None and len(intensity_array) > top_n_peaks:
-
                     if top_n_peaks < 0:
                         raise ValueError("top_n_peaks must be a positive integer")
 
@@ -508,7 +505,6 @@ def get_ms2_dda_content(
                 yield ms2_spectra
 
 
-
 def get_ms2_prm_content(
     analysis_dir: str,
     remove_precursor: bool = False,
@@ -527,7 +523,7 @@ def get_ms2_prm_content(
     min_precursor_neutral_mass: Optional[float] = None,
     max_precursor_neutral_mass: Optional[float] = None,
 ) -> Generator[Ms2Spectra, None, None]:
-    
+
     # TODO: Integrate
 
     with timsdata_connect(analysis_dir) as td:
@@ -549,7 +545,6 @@ def get_ms2_prm_content(
         for _, row in tqdm(
             merged_df.iterrows(), desc="Generating MS2 Spectra", total=len(merged_df)
         ):
-
             if (
                 min_precursor_charge is not None
                 and int(row["Charge"]) < min_precursor_charge
@@ -693,10 +688,10 @@ def get_ms2_dda_spectra(
 ) -> Generator[Ms2Spectra, None, None]:
     """
     Combined function that gets TDF data and generates MS2 DDA spectra in one step.
-    
+
     This function combines the functionality of get_tdf_df and get_ms2_dda_content
     to provide a single interface for extracting MS2 spectra from TimsTOF DDA data.
-    
+
     Args:
         analysis_dir: Path to the .d analysis directory
         remove_precursor: Whether to remove precursor peaks from spectra
@@ -719,11 +714,11 @@ def get_ms2_dda_spectra(
         max_precursor_ccs: Maximum precursor CCS filter
         min_precursor_neutral_mass: Minimum precursor neutral mass filter
         max_precursor_neutral_mass: Maximum precursor neutral mass filter
-    
+
     Yields:
         Ms2Spectra objects containing processed MS2 spectra
     """
-    
+
     # Get filtered TDF dataframe
     merged_df = get_tdf_df(
         analysis_dir=analysis_dir,
@@ -740,7 +735,7 @@ def get_ms2_dda_spectra(
         min_precursor_neutral_mass=min_precursor_neutral_mass,
         max_precursor_neutral_mass=max_precursor_neutral_mass,
     )
-    
+
     # Generate MS2 spectra from the filtered dataframe
     yield from get_ms2_dda_content(
         analysis_dir=analysis_dir,
