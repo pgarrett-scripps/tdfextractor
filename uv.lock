@@ -428,28 +428,13 @@ wheels = [
 [[package]]
 name = "psims"
 version = "1.3.6"
-source = { editable = "../psims" }
+source = { git = "https://github.com/pgarrett-scripps/psims?branch=master#951f44285225e6f34eac7882a75e35828388d230" }
 dependencies = [
     { name = "lxml" },
     { name = "numpy" },
     { name = "six" },
     { name = "sqlalchemy" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "h5py", marker = "extra == 'all'" },
-    { name = "h5py", marker = "extra == 'mzmlb'" },
-    { name = "hdf5plugin", marker = "extra == 'all'" },
-    { name = "hdf5plugin", marker = "extra == 'mzmlb'" },
-    { name = "lxml" },
-    { name = "numpy" },
-    { name = "pynumpress", marker = "extra == 'all'" },
-    { name = "pynumpress", marker = "extra == 'numpress'" },
-    { name = "six" },
-    { name = "sqlalchemy" },
-]
-provides-extras = ["mzmlb", "numpress", "all"]
 
 [[package]]
 name = "pygments"
@@ -563,20 +548,11 @@ wheels = [
 
 [[package]]
 name = "serenipy"
-source = { editable = "../serenipy" }
+version = "0.4.0"
+source = { git = "https://github.com/pgarrett-scripps/serenipy?branch=main#799ba53f764d062c5dda71770837f954bc50656d" }
 dependencies = [
     { name = "pandas" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "build", marker = "extra == 'dev'" },
-    { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "six"
@@ -666,11 +642,11 @@ dev = [
 requires-dist = [
     { name = "numpy" },
     { name = "pandas" },
-    { name = "psims", editable = "../psims" },
+    { name = "psims", git = "https://github.com/pgarrett-scripps/psims?branch=master" },
     { name = "pynumpress", marker = "extra == 'compression'", specifier = ">=0.0.9" },
     { name = "pyzstd", marker = "extra == 'compression'", specifier = ">=0.16" },
-    { name = "serenipy", editable = "../serenipy" },
-    { name = "tdfpy", editable = "../tdfpy" },
+    { name = "serenipy", git = "https://github.com/pgarrett-scripps/serenipy?branch=main" },
+    { name = "tdfpy", git = "https://github.com/tacular-omics/tdfpy?branch=main" },
     { name = "tqdm" },
 ]
 provides-extras = ["compression"]
@@ -688,34 +664,11 @@ dev = [
 
 [[package]]
 name = "tdfpy"
-source = { editable = "../tdfpy" }
+version = "1.0.2"
+source = { git = "https://github.com/tacular-omics/tdfpy?branch=main#f974cbf38242c7459aedee321adbea9309aa874d" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numba", marker = "extra == 'numba'", specifier = ">=0.59" },
-    { name = "numpy" },
-    { name = "pandas" },
-]
-provides-extras = ["numba"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "numpy", specifier = ">=2.3.4" },
-    { name = "pandas", specifier = ">=2.3.3" },
-    { name = "pytest", specifier = ">=7.0" },
-    { name = "pytest-cov", specifier = ">=6.0.0" },
-    { name = "pytest-examples", specifier = ">=0.0.14" },
-    { name = "pyupgrade", specifier = ">=3.21.0" },
-    { name = "ruff", specifier = ">=0.14.3" },
-    { name = "ty", specifier = ">=0.0.9" },
-]
-docs = [
-    { name = "mkdocs-material", specifier = ">=9.0" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.25" },
 ]
 
 [[package]]

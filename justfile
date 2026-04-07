@@ -49,7 +49,7 @@ build:
 # Upgrade Python syntax to 3.12+
 upgrade:
   @echo "Upgrading Python syntax to 3.12+..."
-  @find src/tdfextractor tests -name "*.py" -type f -exec uv run pyupgrade --py312-plus {} +
+  -@find src/tdfextractor tests -name "*.py" -type f -exec uv run pyupgrade --py312-plus {} +
   @echo "Python syntax upgraded to 3.12+"
 
 # Publish to PyPI (requires UV_PUBLISH_TOKEN or interactive auth)

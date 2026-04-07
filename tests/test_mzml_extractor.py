@@ -33,8 +33,7 @@ logging.basicConfig(level=logging.WARNING)
 
 
 def _iter_spectra(root: ET.Element):
-    for spec in root.iter("{http://psi.hupo.org/ms/mzml}spectrum"):
-        yield spec
+    yield from root.iter("{http://psi.hupo.org/ms/mzml}spectrum")
 
 
 def _ms_level(spec: ET.Element) -> int:
@@ -155,9 +154,7 @@ class _AcquisitionWriterMixin:
                     continue
                 if "mean inverse reduced ion mobility array" in _binary_array_names(s):
                     hits += 1
-            self.assertGreater(
-                hits, 0, "no MS1 spectra carried the mean-IM mobility array"
-            )
+            self.assertGreater(hits, 0, "no MS1 spectra carried the mean-IM mobility array")
 
     def test_no_ms1_flag(self):
         out = self._write(include_ms1=False)

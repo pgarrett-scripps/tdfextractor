@@ -9,7 +9,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
 
 from tqdm import tqdm
 
@@ -21,29 +20,29 @@ logger = logging.getLogger(__name__)
 
 def write_mgf_file(
     analysis_dir: str,
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[float] = None,
-    max_precursor_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
-    mz_precision: Optional[int] = 5,
-    intensity_precision: Optional[int] = 0,
+    top_n_peaks: int | None = None,
+    min_spectra_intensity: float | None = None,
+    max_spectra_intensity: float | None = None,
+    min_spectra_mz: float | None = None,
+    max_spectra_mz: float | None = None,
+    min_precursor_intensity: float | None = None,
+    max_precursor_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
+    mz_precision: int | None = 5,
+    intensity_precision: int | None = 0,
     keep_empty_spectra: bool = False,
 ):
 
@@ -92,9 +91,7 @@ def write_mgf_file(
     def consumer():
         logger.info("Writing Contents To File")
         with open(output_file, "w", encoding="UTF-8") as file:
-            with tqdm(
-                desc="Writing MGF File", unit="spectra", total=len(merged_df)
-            ) as pbar:
+            with tqdm(desc="Writing MGF File", unit="spectra", total=len(merged_df)) as pbar:
                 # https://www.matrixscience.com/help/data_file_help.html
                 header_lines = []
                 header_lines.append("INSTRUMENT=TimsTOF")
@@ -123,9 +120,7 @@ def write_mgf_file(
                         f"PEPMASS={spectrum.mz:.6f} {spectrum.prec_intensity:.{intensity_precision}f}"
                     )
                     mgf_lines.append(f"CHARGE={spectrum.charge}+")
-                    for mz, intensity in zip(
-                        spectrum.mz_spectra, spectrum.intensity_spectra
-                    ):
+                    for mz, intensity in zip(spectrum.mz_spectra, spectrum.intensity_spectra):
                         mgf_lines.append(
                             f"{mz:.{mz_precision}f} {intensity:.{intensity_precision}f}"
                         )
@@ -161,9 +156,7 @@ def process_single_d_folder(d_folder, args, output_dir, output_name):
         logger.info(f"Processing {d_folder}...")
 
         _output_dir = output_dir if output_dir is not None else d_folder
-        _output_name = (
-            output_name if output_name is not None else Path(d_folder).stem + ".mgf"
-        )
+        _output_name = output_name if output_name is not None else Path(d_folder).stem + ".mgf"
 
         output = os.path.join(_output_dir, _output_name)
         logger.info(f"Output file: {output}")
@@ -279,9 +272,7 @@ def main():
 
     # Process .d folders with multiple workers if specified
     if len(d_folders) > 1 and args.workers > 1:
-        logger.info(
-            f"Processing {len(d_folders)} .d folders using {args.workers} workers..."
-        )
+        logger.info(f"Processing {len(d_folders)} .d folders using {args.workers} workers...")
 
         successful_count = 0
         failed_count = 0
@@ -312,16 +303,12 @@ def main():
             logger.info("\nExtraction interrupted by user.")
             os._exit(0)
 
-        logger.info(
-            f"Processing completed: {successful_count} successful, {failed_count} failed"
-        )
+        logger.info(f"Processing completed: {successful_count} successful, {failed_count} failed")
     else:
         # Process sequentially (original behavior)
         for d_folder in d_folders:
             try:
-                success = process_single_d_folder(
-                    d_folder, args, output_dir, output_name
-                )
+                success = process_single_d_folder(d_folder, args, output_dir, output_name)
                 if not success:
                     continue
             except KeyboardInterrupt:

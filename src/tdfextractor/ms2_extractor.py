@@ -9,7 +9,6 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from tdfpy import PandasTdf
 from tqdm import tqdm
@@ -26,25 +25,25 @@ def generate_header(
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[float] = None,
-    max_precursor_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
-    mz_precision: Optional[int] = 5,
-    intensity_precision: Optional[int] = 0,
+    top_n_peaks: int | None = None,
+    min_spectra_intensity: float | None = None,
+    max_spectra_intensity: float | None = None,
+    min_spectra_mz: float | None = None,
+    max_spectra_mz: float | None = None,
+    min_precursor_intensity: float | None = None,
+    max_precursor_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
+    mz_precision: int | None = 5,
+    intensity_precision: int | None = 0,
 ):
     """
     Generates a header string for MS2 data using information from the analysis file.
@@ -70,9 +69,7 @@ def generate_header(
         method = "Data-Dependent"
         precursors_df = pd_tdf.precursors
         frames_df = pd_tdf.frames
-        precursor_to_scan_number = map_precursor_to_ip2_scan_number(
-            precursors_df, frames_df
-        )
+        precursor_to_scan_number = map_precursor_to_ip2_scan_number(precursors_df, frames_df)
         first_scan = list(precursor_to_scan_number.values())[0]
         last_scan = list(precursor_to_scan_number.values())[-1]
     elif pd_tdf.is_prm:
@@ -147,31 +144,19 @@ def generate_header(
         precursor_peak_width=precursor_peak_width,
         batch_size=batch_size,
         top_n_peaks=top_n_peaks if top_n_peaks is not None else "None",
-        min_precursor_charge=(
-            min_precursor_charge if min_precursor_charge is not None else "None"
-        ),
-        max_precursor_charge=(
-            max_precursor_charge if max_precursor_charge is not None else "None"
-        ),
+        min_precursor_charge=(min_precursor_charge if min_precursor_charge is not None else "None"),
+        max_precursor_charge=(max_precursor_charge if max_precursor_charge is not None else "None"),
         min_precursor_mz=min_precursor_mz if min_precursor_mz is not None else "None",
         max_precursor_mz=max_precursor_mz if max_precursor_mz is not None else "None",
         min_precursor_rt=min_precursor_rt if min_precursor_rt is not None else "None",
         max_precursor_rt=max_precursor_rt if max_precursor_rt is not None else "None",
-        min_precursor_ccs=(
-            min_precursor_ccs if min_precursor_ccs is not None else "None"
-        ),
-        max_precursor_ccs=(
-            max_precursor_ccs if max_precursor_ccs is not None else "None"
-        ),
+        min_precursor_ccs=(min_precursor_ccs if min_precursor_ccs is not None else "None"),
+        max_precursor_ccs=(max_precursor_ccs if max_precursor_ccs is not None else "None"),
         min_precursor_neutral_mass=(
-            min_precursor_neutral_mass
-            if min_precursor_neutral_mass is not None
-            else "None"
+            min_precursor_neutral_mass if min_precursor_neutral_mass is not None else "None"
         ),
         max_precursor_neutral_mass=(
-            max_precursor_neutral_mass
-            if max_precursor_neutral_mass is not None
-            else "None"
+            max_precursor_neutral_mass if max_precursor_neutral_mass is not None else "None"
         ),
         method=method,
         resolution=120000,
@@ -186,29 +171,29 @@ def generate_header(
 
 def write_ms2_file(
     analysis_dir: str,
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[float] = None,
-    max_precursor_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
-    mz_precision: Optional[int] = 5,
-    intensity_precision: Optional[int] = 0,
+    top_n_peaks: int | None = None,
+    min_spectra_intensity: float | None = None,
+    max_spectra_intensity: float | None = None,
+    min_spectra_mz: float | None = None,
+    max_spectra_mz: float | None = None,
+    min_precursor_intensity: float | None = None,
+    max_precursor_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
+    mz_precision: int | None = 5,
+    intensity_precision: int | None = 0,
     keep_empty_spectra: bool = False,
 ):
 
@@ -285,9 +270,7 @@ def write_ms2_file(
     def consumer():
         with open(output_file, "w", encoding="UTF-8") as file:
             file.write(ms2_header)
-            with tqdm(
-                desc="Writing MS2 Spectra", unit="spectra", total=len(merged_df)
-            ) as pbar:
+            with tqdm(desc="Writing MS2 Spectra", unit="spectra", total=len(merged_df)) as pbar:
                 while True:
                     ms2_spectra = spectra_queue.get()
 
@@ -408,9 +391,7 @@ def main():
         logger.info(f"Processing {d_folder}...")
 
         _output_dir = output_dir if output_dir is not None else d_folder
-        _output_name = (
-            output_name if output_name is not None else Path(d_folder).stem + ".ms2"
-        )
+        _output_name = output_name if output_name is not None else Path(d_folder).stem + ".ms2"
 
         output = os.path.join(_output_dir, _output_name)
         logger.info(f"Output file: {output}")

@@ -18,8 +18,9 @@ import logging
 import os
 import time
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from psims.mzml.writer import MzMLWriter
@@ -48,7 +49,7 @@ _MOBILITY_ARRAY = "mean inverse reduced ion mobility array"
 # CLI compression name -> psims compression identifier (see
 # psims.mzml.binary_encoding.compressors). Numpress / zstd entries are only
 # usable when their backing libraries are installed.
-_COMPRESSION_NAME_MAP: Dict[str, str] = {
+_COMPRESSION_NAME_MAP: dict[str, str] = {
     "none": "none",
     "zlib": "zlib",
     "zstd": "zstd",
@@ -58,7 +59,7 @@ _COMPRESSION_NAME_MAP: Dict[str, str] = {
 }
 
 
-def _resolve_compression(name: Optional[str]) -> str:
+def _resolve_compression(name: str | None) -> str:
     """Translate a CLI compression name into the psims identifier."""
 
     if name is None:
@@ -67,12 +68,11 @@ def _resolve_compression(name: Optional[str]) -> str:
         return _COMPRESSION_NAME_MAP[name]
     except KeyError as exc:
         raise ValueError(
-            f"Unknown compression {name!r}; expected one of "
-            f"{sorted(_COMPRESSION_NAME_MAP)}"
+            f"Unknown compression {name!r}; expected one of {sorted(_COMPRESSION_NAME_MAP)}"
         ) from exc
 
 
-def _resolve_encoding(bits: Optional[int]) -> Any:
+def _resolve_encoding(bits: int | None) -> Any:
     """Translate a 32/64-bit width to the corresponding numpy dtype."""
 
     if bits is None or bits == 64:
@@ -86,7 +86,7 @@ def _build_compression_dict(
     mz_compression: str,
     intensity_compression: str,
     mobility_compression: str,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     return {
         _MZ_ARRAY: _resolve_compression(mz_compression),
         _INTENSITY_ARRAY: _resolve_compression(intensity_compression),
@@ -97,7 +97,7 @@ def _build_compression_dict(
 def _build_encoding_dict(
     mz_encoding: int,
     intensity_encoding: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         _MZ_ARRAY: _resolve_encoding(mz_encoding),
         _INTENSITY_ARRAY: _resolve_encoding(intensity_encoding),
@@ -110,8 +110,8 @@ def _scan_id(index: int) -> str:
 
 
 def _split_centroided_peaks(
-    peaks: Optional[np.ndarray],
-) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+    peaks: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Split a centroided peak array into (mz, intensity, optional mobility)."""
 
     if peaks is None or peaks.size == 0:
@@ -136,12 +136,12 @@ def _write_ms1_spectrum(
     scan_id: str,
     mz: np.ndarray,
     intensity: np.ndarray,
-    mobility: Optional[np.ndarray],
+    mobility: np.ndarray | None,
     rt_seconds: float,
     compression: Mapping[str, str],
     encoding: Mapping[str, Any],
 ) -> None:
-    other_arrays: List[Tuple[Any, np.ndarray]] = []
+    other_arrays: list[tuple[Any, np.ndarray]] = []
     if mobility is not None and mobility.size == mz.size and mobility.size > 0:
         other_arrays.append((_MOBILITY_ARRAY, mobility))
 
@@ -166,7 +166,7 @@ def _write_ms2_spectrum(
     writer: MzMLWriter,
     *,
     scan_id: str,
-    parent_scan_id: Optional[str],
+    parent_scan_id: str | None,
     mz: np.ndarray,
     intensity: np.ndarray,
     rt_seconds: float,
@@ -175,13 +175,13 @@ def _write_ms2_spectrum(
     collision_energy: float,
     inverse_reduced_ion_mobility: float,
     precursor_mz: float,
-    precursor_intensity: Optional[float],
-    precursor_charge: Optional[int],
+    precursor_intensity: float | None,
+    precursor_charge: int | None,
     compression: Mapping[str, str],
     encoding: Mapping[str, Any],
 ) -> None:
     half_width = iso_width / 2.0
-    precursor_info: Dict[str, Any] = {
+    precursor_info: dict[str, Any] = {
         "mz": float(precursor_mz),
         "activation": [
             "beam-type collisional dissociation",
@@ -272,7 +272,7 @@ def _write_header(writer: MzMLWriter, analysis_dir: str) -> None:
 
 def _iter_dda_ms1(
     analysis_dir: str, frame_ids: Iterable[int]
-) -> Iterable[Tuple[int, np.ndarray, np.ndarray, np.ndarray, float]]:
+) -> Iterable[tuple[int, np.ndarray, np.ndarray, np.ndarray, float]]:
     """Yield (frame_id, mz, intensity, mobility, rt_seconds) per DDA MS1 frame."""
 
     with DDA(analysis_dir) as dda:
@@ -296,32 +296,30 @@ def _write_dda(
     remove_precursor: bool,
     precursor_peak_width: float,
     batch_size: int,
-    top_n_peaks: Optional[int],
-    min_spectra_intensity: Optional[float],
-    max_spectra_intensity: Optional[float],
-    min_spectra_mz: Optional[float],
-    max_spectra_mz: Optional[float],
-    min_precursor_intensity: Optional[float],
-    max_precursor_intensity: Optional[float],
-    min_precursor_charge: Optional[int],
-    max_precursor_charge: Optional[int],
-    min_precursor_mz: Optional[float],
-    max_precursor_mz: Optional[float],
-    min_precursor_rt: Optional[float],
-    max_precursor_rt: Optional[float],
-    min_precursor_ccs: Optional[float],
-    max_precursor_ccs: Optional[float],
-    min_precursor_neutral_mass: Optional[float],
-    max_precursor_neutral_mass: Optional[float],
+    top_n_peaks: int | None,
+    min_spectra_intensity: float | None,
+    max_spectra_intensity: float | None,
+    min_spectra_mz: float | None,
+    max_spectra_mz: float | None,
+    min_precursor_intensity: float | None,
+    max_precursor_intensity: float | None,
+    min_precursor_charge: int | None,
+    max_precursor_charge: int | None,
+    min_precursor_mz: float | None,
+    max_precursor_mz: float | None,
+    min_precursor_rt: float | None,
+    max_precursor_rt: float | None,
+    min_precursor_ccs: float | None,
+    max_precursor_ccs: float | None,
+    min_precursor_neutral_mass: float | None,
+    max_precursor_neutral_mass: float | None,
 ) -> None:
     frames_df = pd_tdf.frames
     precursors_df = pd_tdf.precursors
 
     ms1_frame_ids = [int(f) for f in get_ms1_frames_ids(frames_df).tolist()]
     parent_to_precs = map_parent_id_to_precursors(precursors_df)
-    frame_id_to_ms1_scan, ms2_scan_map = map_frame_id_to_ms1_scan(
-        parent_to_precs, ms1_frame_ids
-    )
+    frame_id_to_ms1_scan, ms2_scan_map = map_frame_id_to_ms1_scan(parent_to_precs, ms1_frame_ids)
 
     merged_df = get_tdf_df(
         analysis_dir,
@@ -340,7 +338,7 @@ def _write_dda(
     )
 
     logger.info("Extracting MS2 spectra")
-    ms2_by_parent: Dict[int, list] = {}
+    ms2_by_parent: dict[int, list] = {}
     for spectrum in tqdm(
         get_ms2_dda_content(
             analysis_dir=analysis_dir,
@@ -370,9 +368,7 @@ def _write_dda(
 
     with writer.run(id=Path(analysis_dir).stem):
         with writer.spectrum_list(count=total_spectra):
-            ms1_iter = (
-                _iter_dda_ms1(analysis_dir, ms1_frame_ids) if include_ms1 else iter(())
-            )
+            ms1_iter = _iter_dda_ms1(analysis_dir, ms1_frame_ids) if include_ms1 else iter(())
 
             pbar = tqdm(total=total_spectra, desc="Writing mzML", unit="spectra")
             for frame_id, mz_arr, int_arr, mob_arr, rt_s in ms1_iter:
@@ -393,9 +389,7 @@ def _write_dda(
                 pbar.update(1)
 
                 for ms2 in ms2_by_parent.get(frame_id, []):
-                    ms2_scan_index = ms2_scan_map.get(frame_id, {}).get(
-                        int(ms2.precursor_id)
-                    )
+                    ms2_scan_index = ms2_scan_map.get(frame_id, {}).get(int(ms2.precursor_id))
                     if ms2_scan_index is None:
                         continue
                     iso_mz = float(getattr(ms2, "iso_mz", ms2.mz))
@@ -432,10 +426,10 @@ def _write_dda(
 
 def _collect_windowed_ms2(
     windows_iter: Iterable[Any],
-) -> Tuple[Dict[int, list], int]:
+) -> tuple[dict[int, list], int]:
     """Group DIA windows or PRM transitions by their parent frame_id."""
 
-    grouped: Dict[int, list] = defaultdict(list)
+    grouped: dict[int, list] = defaultdict(list)
     total = 0
     for w in windows_iter:
         grouped[int(w.frame_id)].append(w)
@@ -453,10 +447,10 @@ def _write_dia_or_prm(
     encoding: Mapping[str, Any],
     include_ms1: bool,
     keep_empty_spectra: bool,
-    min_precursor_mz: Optional[float],
-    max_precursor_mz: Optional[float],
-    min_precursor_rt: Optional[float],
-    max_precursor_rt: Optional[float],
+    min_precursor_mz: float | None,
+    max_precursor_mz: float | None,
+    min_precursor_rt: float | None,
+    max_precursor_rt: float | None,
 ) -> None:
     frames_df = pd_tdf.frames.sort_values("Id").reset_index(drop=True)
 
@@ -477,12 +471,11 @@ def _write_dia_or_prm(
         total_spectra = total_ms1 + total_ms2
 
         logger.info(
-            f"Writing mzML ({total_spectra} spectra: "
-            f"{total_ms1} MS1, {total_ms2} {kind} MS2)"
+            f"Writing mzML ({total_spectra} spectra: {total_ms1} MS1, {total_ms2} {kind} MS2)"
         )
 
         scan_counter = 0
-        current_ms1_id: Optional[str] = None
+        current_ms1_id: str | None = None
         pbar = tqdm(total=total_spectra, desc="Writing mzML", unit="spectra")
 
         with writer.run(id=Path(analysis_dir).stem):
@@ -571,27 +564,27 @@ def _write_dia_or_prm(
 
 def write_mzml_file(
     analysis_dir: str,
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[float] = None,
-    max_precursor_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
+    top_n_peaks: int | None = None,
+    min_spectra_intensity: float | None = None,
+    max_spectra_intensity: float | None = None,
+    min_spectra_mz: float | None = None,
+    max_spectra_mz: float | None = None,
+    min_precursor_intensity: float | None = None,
+    max_precursor_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
     keep_empty_spectra: bool = False,
     include_ms1: bool = True,
     mz_compression: str = "zlib",
@@ -767,9 +760,7 @@ def main():
         logger.info(f"Processing {d_folder}...")
 
         _output_dir = output_dir if output_dir is not None else d_folder
-        _output_name = (
-            output_name if output_name is not None else Path(d_folder).stem + ".mzML"
-        )
+        _output_name = output_name if output_name is not None else Path(d_folder).stem + ".mzML"
         output = os.path.join(_output_dir, _output_name)
         logger.info(f"Output file: {output}")
 

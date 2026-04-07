@@ -106,9 +106,9 @@ exclude = [
 ]
 
 # During development we resolve the three unreleased sibling projects from
-# their local checkouts instead of PyPI. Published metadata still points at
-# the PyPI names above, so this only affects `uv sync` / `uv lock`.
+# their GitHub repositories instead of PyPI. Published metadata still points
+# at the PyPI names above, so this only affects `uv sync` / `uv lock`.
 [tool.uv.sources]
-tdfpy = {path = "../tdfpy", editable = true}
-serenipy = {path = "../serenipy", editable = true}
-psims = {path = "../psims", editable = true}
+tdfpy = {git = "https://github.com/tacular-omics/tdfpy", branch = "main"}
+serenipy = {git = "https://github.com/pgarrett-scripps/serenipy", branch = "main"}
+psims = {git = "https://github.com/pgarrett-scripps/psims", branch = "master"}
