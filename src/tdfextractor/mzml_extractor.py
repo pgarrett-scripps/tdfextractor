@@ -166,7 +166,7 @@ def _write_ms2_spectrum(
     writer: MzMLWriter,
     *,
     scan_id: str,
-    parent_scan_id: str,
+    parent_scan_id: Optional[str],
     mz: np.ndarray,
     intensity: np.ndarray,
     rt_seconds: float,
@@ -183,13 +183,14 @@ def _write_ms2_spectrum(
     half_width = iso_width / 2.0
     precursor_info: Dict[str, Any] = {
         "mz": float(precursor_mz),
-        "scan_id": parent_scan_id,
         "activation": [
             "beam-type collisional dissociation",
             {"collision energy": float(collision_energy)},
         ],
         "isolation_window": [half_width, float(iso_mz), half_width],
     }
+    if parent_scan_id is not None:
+        precursor_info["scan_id"] = parent_scan_id
     if precursor_intensity is not None:
         precursor_info["intensity"] = float(precursor_intensity)
     if precursor_charge is not None:
@@ -558,7 +559,7 @@ def _write_dia_or_prm(
                         _write_ms2_spectrum(
                             writer,
                             scan_id=_scan_id(scan_counter),
-                            parent_scan_id=current_ms1_id or _scan_id(scan_counter),
+                            parent_scan_id=current_ms1_id,
                             mz=mz2,
                             intensity=int2,
                             rt_seconds=rt_s,
