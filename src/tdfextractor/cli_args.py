@@ -8,9 +8,7 @@ import argparse
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     """Add common arguments shared between MS2 and MGF extractors."""
 
-    parser.add_argument(
-        "analysis_dir", type=str, help="Path to the .D analysis directory"
-    )
+    parser.add_argument("analysis_dir", type=str, help="Path to the .D analysis directory")
 
     parser.add_argument(
         "-o",
@@ -176,9 +174,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         help="Keep spectra with no peaks (default: False)",
     )
 
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Enable verbose logging"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
 
     parser.add_argument(
         "--overwrite",
@@ -236,8 +232,7 @@ def add_mzml_specific_args(parser: argparse.ArgumentParser) -> None:
         choices=_COMPRESSORS,
         default="zlib",
         help=(
-            "Compression for m/z arrays. zstd requires zstandard; numpress-* "
-            "requires pynumpress."
+            "Compression for m/z arrays. zstd requires zstandard; numpress-* requires pynumpress."
         ),
     )
     parser.add_argument(
@@ -325,9 +320,7 @@ def apply_preset_settings(logger, args: argparse.Namespace) -> None:
         else:
             args.min_precursor_charge = 2
         if args.top_n_peaks is not None:
-            logger.warning(
-                f"IP2 preset overridden... setting top_n_peaks to {args.top_n_peaks}"
-            )
+            logger.warning(f"IP2 preset overridden... setting top_n_peaks to {args.top_n_peaks}")
         else:
             args.top_n_peaks = 500
 
@@ -387,9 +380,7 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
     logger.info(f"  Remove Precursor: {args.remove_precursor}")
     logger.info(f"  Precursor Peak Width: {args.precursor_peak_width} Da")
     logger.info(f"  Batch Size: {args.batch_size}")
-    logger.info(
-        f"  Top N Peaks: {args.top_n_peaks if args.top_n_peaks is not None else 'All'}"
-    )
+    logger.info(f"  Top N Peaks: {args.top_n_peaks if args.top_n_peaks is not None else 'All'}")
     logger.info(
         f"  Min Spectra Intensity: {args.min_spectra_intensity if args.min_spectra_intensity is not None else 'None'}"
     )
