@@ -124,8 +124,8 @@ def test_mgf_default_precision(mgf_dda_output: Path) -> None:
 def test_mgf_custom_precision(tmp_path_factory, dda_d_folder: Path) -> None:
     """Custom mz_precision/intensity_precision flow through to output.
 
-    Uses ``max_precursor_rt`` to bound the extraction to roughly 25% of
-    the precursors in the DDA fixture, keeping this extra extraction cheap.
+    Uses a tight ``max_precursor_rt`` window to keep this extra extraction
+    cheap.
     """
     out_dir = tmp_path_factory.mktemp("mgf_precision")
     out = out_dir / "precision.mgf"
@@ -135,7 +135,7 @@ def test_mgf_custom_precision(tmp_path_factory, dda_d_folder: Path) -> None:
             output_file=str(out),
             mz_precision=3,
             intensity_precision=2,
-            max_precursor_rt=2415.0,
+            max_precursor_rt=2403.0,
         )
     )
     text = out.read_text(encoding="utf-8")

@@ -299,7 +299,19 @@ def _write_dda(
     frames_df = pd_tdf.frames
     precursors_df = pd_tdf.precursors
 
-    ms1_frame_ids = [int(f) for f in get_ms1_frames_ids(frames_df).tolist()]
+    # Honor --min/--max-precursor-rt for MS1 frames as well as MS2 precursors,
+    # so the writer produces a coherent RT-bounded slice of the file rather
+    # than dropping MS2 while still emitting every MS1 frame in the run.
+    ms1_frames_view = get_ms1_frames_ids(frames_df)
+    ms1_frame_ids: list[int] = []
+    ms1_times = frames_df.set_index("Id")["Time"]
+    for fid in ms1_frames_view.tolist():
+        rt = float(ms1_times.loc[int(fid)])
+        if args.min_precursor_rt is not None and rt < args.min_precursor_rt:
+            continue
+        if args.max_precursor_rt is not None and rt > args.max_precursor_rt:
+            continue
+        ms1_frame_ids.append(int(fid))
     parent_to_precs = map_parent_id_to_precursors(precursors_df)
     frame_id_to_ms1_scan, ms2_scan_map = map_frame_id_to_ms1_scan(parent_to_precs, ms1_frame_ids)
 
@@ -441,6 +453,14 @@ def _write_dia_or_prm(
     max_precursor_rt = args.max_precursor_rt
 
     frames_df = pd_tdf.frames.sort_values("Id").reset_index(drop=True)
+    # Honor --min/--max-precursor-rt for the whole frames table so that MS1
+    # frames outside the RT window are skipped along with the MS2 windows
+    # the loop below already filters explicitly.
+    if min_precursor_rt is not None:
+        frames_df = frames_df[frames_df["Time"] >= min_precursor_rt]
+    if max_precursor_rt is not None:
+        frames_df = frames_df[frames_df["Time"] <= max_precursor_rt]
+    frames_df = frames_df.reset_index(drop=True)
 
     with reader_factory(analysis_dir) as reader:
         # Materialize the windows/transitions once and group by parent frame.

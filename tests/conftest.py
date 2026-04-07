@@ -27,6 +27,20 @@ DDA_D = DATA_DIR / "200ngHeLaPASEF_1min.d"
 DIA_D = DATA_DIR / "example_dia.d"
 PRM_D = DATA_DIR / "example_prm.d"
 
+# Frame Time ranges (seconds) for the bundled test fixtures, used to bound
+# extractions to a small slice of each file. The writers honor min/max
+# precursor_rt for both MS1 frames and MS2 spectra, so a tight cap keeps the
+# session-scoped fixtures cheap (~seconds instead of minutes) while still
+# producing real spectra to assert against.
+#
+# The bundled DDA file runs from ~2401s and the bundled PRM file's MS2
+# transitions only start at ~324s — these aren't slices of "the first N
+# seconds", they're tight RT windows that intersect actual MS1 + MS2 data.
+DDA_MAX_RT = 2403.0  # ~3s of a 60s file: 3 MS1, 110 MS2 precursors
+DIA_MAX_RT = 5.0  # first ~5s of a 53s file: ~3 MS1, ~45 MS2 windows
+PRM_MIN_RT = 320.0  # PRM MS2 transitions begin at ~324.5s
+PRM_MAX_RT = 340.0  # 20s window: 4 MS1, ~85 MS2 transitions
+
 logging.basicConfig(level=logging.WARNING)
 
 
@@ -59,7 +73,13 @@ def prm_d_folder() -> Path:
 def mzml_dda_output(tmp_path_factory, dda_d_folder: Path) -> Path:
     out_dir = tmp_path_factory.mktemp("mzml_dda")
     out = out_dir / (dda_d_folder.stem + ".mzML")
-    write_mzml_file(MzmlArgs(analysis_dir=str(dda_d_folder), output_file=str(out)))
+    write_mzml_file(
+        MzmlArgs(
+            analysis_dir=str(dda_d_folder),
+            output_file=str(out),
+            max_precursor_rt=DDA_MAX_RT,
+        )
+    )
     return out
 
 
@@ -67,7 +87,13 @@ def mzml_dda_output(tmp_path_factory, dda_d_folder: Path) -> Path:
 def mzml_dia_output(tmp_path_factory, dia_d_folder: Path) -> Path:
     out_dir = tmp_path_factory.mktemp("mzml_dia")
     out = out_dir / (dia_d_folder.stem + ".mzML")
-    write_mzml_file(MzmlArgs(analysis_dir=str(dia_d_folder), output_file=str(out)))
+    write_mzml_file(
+        MzmlArgs(
+            analysis_dir=str(dia_d_folder),
+            output_file=str(out),
+            max_precursor_rt=DIA_MAX_RT,
+        )
+    )
     return out
 
 
@@ -75,7 +101,14 @@ def mzml_dia_output(tmp_path_factory, dia_d_folder: Path) -> Path:
 def mzml_prm_output(tmp_path_factory, prm_d_folder: Path) -> Path:
     out_dir = tmp_path_factory.mktemp("mzml_prm")
     out = out_dir / (prm_d_folder.stem + ".mzML")
-    write_mzml_file(MzmlArgs(analysis_dir=str(prm_d_folder), output_file=str(out)))
+    write_mzml_file(
+        MzmlArgs(
+            analysis_dir=str(prm_d_folder),
+            output_file=str(out),
+            min_precursor_rt=PRM_MIN_RT,
+            max_precursor_rt=PRM_MAX_RT,
+        )
+    )
     return out
 
 
@@ -89,6 +122,7 @@ def mzml_dia_no_ms1_output(tmp_path_factory, dia_d_folder: Path) -> Path:
             analysis_dir=str(dia_d_folder),
             output_file=str(out),
             include_ms1=False,
+            max_precursor_rt=DIA_MAX_RT,
         )
     )
     return out
@@ -108,6 +142,7 @@ def mzml_dia_no_mz_compression_output(tmp_path_factory, dia_d_folder: Path) -> P
             mobility_compression="zlib",
             mz_encoding=64,
             intensity_encoding=32,
+            max_precursor_rt=DIA_MAX_RT,
         )
     )
     return out
@@ -122,7 +157,13 @@ def mzml_dia_no_mz_compression_output(tmp_path_factory, dia_d_folder: Path) -> P
 def ms2_dda_output(tmp_path_factory, dda_d_folder: Path) -> Path:
     out_dir = tmp_path_factory.mktemp("ms2_dda")
     out = out_dir / (dda_d_folder.stem + ".ms2")
-    write_ms2_file(Ms2Args(analysis_dir=str(dda_d_folder), output_file=str(out)))
+    write_ms2_file(
+        Ms2Args(
+            analysis_dir=str(dda_d_folder),
+            output_file=str(out),
+            max_precursor_rt=DDA_MAX_RT,
+        )
+    )
     return out
 
 
@@ -135,5 +176,11 @@ def ms2_dda_output(tmp_path_factory, dda_d_folder: Path) -> Path:
 def mgf_dda_output(tmp_path_factory, dda_d_folder: Path) -> Path:
     out_dir = tmp_path_factory.mktemp("mgf_dda")
     out = out_dir / (dda_d_folder.stem + ".mgf")
-    write_mgf_file(MgfArgs(analysis_dir=str(dda_d_folder), output_file=str(out)))
+    write_mgf_file(
+        MgfArgs(
+            analysis_dir=str(dda_d_folder),
+            output_file=str(out),
+            max_precursor_rt=DDA_MAX_RT,
+        )
+    )
     return out
