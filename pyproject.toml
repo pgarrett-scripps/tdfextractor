@@ -12,7 +12,7 @@ authors = [
 dependencies = [
     "tdfpy>=1.0.2",
     "serenipy>=0.4.0",
-    "psims>=1.3.6",
+    "psims>=1.3.5",
     "numpy",
     "pandas",
     "tqdm",
@@ -110,5 +110,4 @@ exclude = [
 # at the PyPI names above, so this only affects `uv sync` / `uv lock`.
 [tool.uv.sources]
 tdfpy = {git = "https://github.com/tacular-omics/tdfpy", branch = "main"}
-serenipy = {git = "https://github.com/pgarrett-scripps/serenipy", branch = "main"}
-psims = {git = "https://github.com/pgarrett-scripps/psims", branch = "master"}
+

@@ -427,13 +427,17 @@ wheels = [
 
 [[package]]
 name = "psims"
-version = "1.3.6"
-source = { git = "https://github.com/pgarrett-scripps/psims?branch=master#951f44285225e6f34eac7882a75e35828388d230" }
+version = "1.3.5"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lxml" },
     { name = "numpy" },
     { name = "six" },
     { name = "sqlalchemy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dd/f8/b0dc9e3fdf118019fd82453b6fa21280b33cbdb53fcfdd8701d937007cb3/psims-1.3.5.tar.gz", hash = "sha256:e909c65e56612000900901273c086adf5d88a4f3dd150ca7eb7b34f04b6b01e1", size = 18798760, upload-time = "2025-01-19T01:01:38.177Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/5f/f0e098c5730330342e25ecc5e303662834ec98f2fb9435a8eafa40b1aac0/psims-1.3.5-py3-none-any.whl", hash = "sha256:98e0a45a39c7ba4249ab7fd4506e79d89636d60dfba63838e54ee0305bedbfb6", size = 18815061, upload-time = "2025-01-19T01:01:34.306Z" },
 ]
 
 [[package]]
@@ -549,9 +553,13 @@ wheels = [
 [[package]]
 name = "serenipy"
 version = "0.4.0"
-source = { git = "https://github.com/pgarrett-scripps/serenipy?branch=main#799ba53f764d062c5dda71770837f954bc50656d" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/24/84d6515be1c42aaa4dea3c205d60aae8ca946dd956205413a1f85277e0b6/serenipy-0.4.0.tar.gz", hash = "sha256:6a5a2ff4d31addeb937f8ed0337ba93fd0b5e4f0aaf78c33d9ef6574a3026c64", size = 24091, upload-time = "2026-04-07T21:28:30.838Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/63/0188ecc2464e891b2339f2e7dfd1d176fb7ef6f3bd5cc130bed75d212f27/serenipy-0.4.0-py3-none-any.whl", hash = "sha256:a951e00f13e2b153ce4c54934758fd2cee98495758d1e95037c6ad99f1f38428", size = 23579, upload-time = "2026-04-07T21:28:29.969Z" },
 ]
 
 [[package]]
@@ -642,10 +650,10 @@ dev = [
 requires-dist = [
     { name = "numpy" },
     { name = "pandas" },
-    { name = "psims", git = "https://github.com/pgarrett-scripps/psims?branch=master" },
+    { name = "psims", specifier = ">=1.3.5" },
     { name = "pynumpress", marker = "extra == 'compression'", specifier = ">=0.0.9" },
     { name = "pyzstd", marker = "extra == 'compression'", specifier = ">=0.16" },
-    { name = "serenipy", git = "https://github.com/pgarrett-scripps/serenipy?branch=main" },
+    { name = "serenipy", specifier = ">=0.4.0" },
     { name = "tdfpy", git = "https://github.com/tacular-omics/tdfpy?branch=main" },
     { name = "tqdm" },
 ]
