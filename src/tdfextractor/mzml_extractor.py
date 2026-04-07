@@ -242,6 +242,9 @@ def write_mzml_file(
                                 {"ms level": 2},
                                 {"total ion current": float(int2.sum())},
                             ],
+                            scan_params=[
+                                {"inverse reduced ion mobility": ook0},
+                            ],
                             precursor_information={
                                 "mz": float(ms2.mz),
                                 "intensity": float(ms2.prec_intensity),
@@ -252,9 +255,6 @@ def write_mzml_file(
                                     {"collision energy": ce},
                                 ],
                                 "isolation_window": [iso_w / 2.0, iso_mz, iso_w / 2.0],
-                                "params": [
-                                    {"inverse reduced ion mobility": ook0},
-                                ],
                             },
                         )
                         pbar.update(1)
