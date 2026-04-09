@@ -18,6 +18,9 @@ sync:
 test:
   uv run pytest tests/ -v
 
+testf:
+  uv run pytest tests/ -v -m "not slow"
+
 # Run tests with coverage
 test-cov:
   uv run pytest tests --cov=src/tdfextractor --cov-branch --cov-report=term-missing --cov-report=html --cov-report=xml
