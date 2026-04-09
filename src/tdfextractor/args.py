@@ -122,6 +122,14 @@ class MzmlArgs(BaseExtractorArgs):
     mz_encoding: EncodingBitWidth = 64
     intensity_encoding: EncodingBitWidth = 32
 
+    # Centroiding parameters forwarded to tdfpy's centroid()
+    centroid_mz_tolerance: float = 8.0
+    centroid_mz_tolerance_type: str = "ppm"
+    centroid_im_tolerance: float = 0.05
+    centroid_im_tolerance_type: str = "relative"
+    centroid_min_peaks: int = 5
+    centroid_noise_filter: str | None = None
+
     def __post_init__(self) -> None:
         for name in ("mz_encoding", "intensity_encoding"):
             value = getattr(self, name)
@@ -137,4 +145,7 @@ class MzmlArgs(BaseExtractorArgs):
         # the positive include_ms1 form, so invert here.
         if hasattr(ns, "no_ms1"):
             obj.include_ms1 = not ns.no_ms1
+        # "none" string from argparse choices -> Python None
+        if getattr(obj, "centroid_noise_filter", None) == "none":
+            obj.centroid_noise_filter = None
         return obj  # type: ignore[return-value]

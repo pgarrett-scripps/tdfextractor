@@ -1,6 +1,6 @@
 # tdfextractor
 
-A Python package to extract MS/MS spectra from Bruker TimsTOF .D folders and convert them to standard formats (MS2 and MGF).
+A Python package to extract MS/MS spectra from Bruker TimsTOF .D folders and convert them to standard formats (MS2, MGF, and mzML).
 
 ## Installation
 
@@ -34,6 +34,19 @@ mgf-extractor /path/to/sample.d
 mgf-ex
 mgf-ex /path/to/sample.d --casanovo  # Optimized for Casanovo de novo sequencing
 mgf-ex /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
+```
+
+### mzML Extraction
+Extract mzML format files (includes both MS1 and MS2 PASEF spectra):
+
+```bash
+mzml-extractor /path/to/sample.d
+
+# shorthand
+mzml-ex /path/to/sample.d
+mzml-ex /path/to/sample.d --no-ms1  # MS2 spectra only
+mzml-ex /path/to/sample.d --mz-compression zstd --intensity-encoding 32
+mzml-ex /path/to/directory_with_multiple_d_folders --output /path/to/output_directory
 ```
 
 ## Output Options
@@ -95,6 +108,23 @@ Both MS2 and MGF extractors share the same arguments, with only a few format-spe
 
 **MGF Extractor Only:**
 - `--casanovo`: Use Casanovo preset settings (enables precursor removal, top-150 peaks, min intensity 0.01, m/z range 50-2500, min charge 2)
+
+**mzML Extractor Only:**
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--no-ms1` | flag | False | Skip MS1 spectra; write only MS2 PASEF spectra |
+| `--mz-compression` | str | `zlib` | Compression for m/z arrays (`none`, `zlib`, `zstd`, `numpress-linear`, `numpress-slof`, `numpress-pic`) |
+| `--intensity-compression` | str | `zlib` | Compression for intensity arrays |
+| `--mobility-compression` | str | `zlib` | Compression for per-peak ion mobility arrays (MS1) |
+| `--mz-encoding` | int | `64` | Bit width for m/z values (`32` or `64`) |
+| `--intensity-encoding` | int | `32` | Bit width for intensity values (`32` or `64`) |
+| `--centroid-noise-filter` | str | `none` | Noise filter before centroiding (`none`, `mad`, `percentile`, `histogram`, `baseline`, `iterative_median`) |
+| `--centroid-mz-tolerance` | float | `8.0` | m/z tolerance for centroiding |
+| `--centroid-mz-tolerance-type` | str | `ppm` | Unit for m/z tolerance (`ppm` or `da`) |
+| `--centroid-im-tolerance` | float | `0.05` | Ion mobility tolerance for centroiding |
+| `--centroid-im-tolerance-type` | str | `relative` | Unit for ion mobility tolerance (`relative` or `absolute`) |
+| `--centroid-min-peaks` | int | `5` | Minimum raw peaks required to form a centroided peak |
 
 ### Performance Options
 

@@ -108,6 +108,18 @@ def _build_encoding_dict(
     }
 
 
+def _build_centroid_kwargs(args: MzmlArgs) -> dict:
+    """Build a kwargs dict for tdfpy's centroid() from MzmlArgs centroid fields."""
+    return {
+        "mz_tolerance": args.centroid_mz_tolerance,
+        "mz_tolerance_type": args.centroid_mz_tolerance_type,
+        "im_tolerance": args.centroid_im_tolerance,
+        "im_tolerance_type": args.centroid_im_tolerance_type,
+        "min_peaks": args.centroid_min_peaks,
+        "noise_filter": args.centroid_noise_filter,
+    }
+
+
 def _scan_id(index: int) -> str:
     return f"scan={index}"
 
@@ -274,16 +286,18 @@ def _write_header(writer: MzMLWriter, analysis_dir: str) -> None:
 
 
 def _iter_dda_ms1(
-    analysis_dir: str, frame_ids: Iterable[int]
+    analysis_dir: str,
+    frame_ids: Iterable[int],
+    centroid_kwargs: dict,
 ) -> Iterable[tuple[int, np.ndarray, np.ndarray, np.ndarray, float]]:
     """Yield (frame_id, mz, intensity, mobility, rt_seconds) per DDA MS1 frame."""
 
     with DDA(analysis_dir) as dda:
         for fid in frame_ids:
-            frame = dda.ms1.get(int(fid))
+            frame = dda.ms1[int(fid)]
             if frame is None:
                 continue
-            mz, intensity, mobility = _split_centroided_peaks(frame.centroid())
+            mz, intensity, mobility = _split_centroided_peaks(frame.centroid(**centroid_kwargs))
             yield int(fid), mz, intensity, mobility, float(frame.time)
 
 
@@ -360,10 +374,12 @@ def _write_dda(
         f"{len(ms1_frame_ids) if args.include_ms1 else 0} MS1, {total_ms2} MS2)"
     )
 
+    centroid_kwargs = _build_centroid_kwargs(args)
+
     with writer.run(id=Path(analysis_dir).stem):
         with writer.spectrum_list(count=total_spectra):
             ms1_iter = (
-                _iter_dda_ms1(analysis_dir, ms1_frame_ids)
+                _iter_dda_ms1(analysis_dir, ms1_frame_ids, centroid_kwargs)
                 if args.include_ms1
                 else iter(())
             )
@@ -482,6 +498,7 @@ def _write_dia_or_prm(
             f"Writing mzML ({total_spectra} spectra: {total_ms1} MS1, {total_ms2} {kind} MS2)"
         )
 
+        centroid_kwargs = _build_centroid_kwargs(args)
         scan_counter = 0
         current_ms1_id: str | None = None
         pbar = tqdm(total=total_spectra, desc="Writing mzML", unit="spectra")
@@ -499,11 +516,8 @@ def _write_dia_or_prm(
                         frame = reader.ms1.get(frame_id)
                         if frame is None:
                             continue
-                        # min_peaks=1: PRM MS1 frames in particular are sparse
-                        # in the mobility dimension; the default of 3 drops
-                        # them entirely.
                         mz, intensity, mobility = _split_centroided_peaks(
-                            frame.centroid(min_peaks=1)
+                            frame.centroid(**centroid_kwargs)
                         )
                         scan_counter += 1
                         ms1_id = _scan_id(scan_counter)
@@ -535,9 +549,7 @@ def _write_dia_or_prm(
                             continue
                         if max_precursor_rt is not None and rt_s > max_precursor_rt:
                             continue
-                        # min_peaks=1: narrow PRM isolation windows often
-                        # contain only a single mobility scan with a peak.
-                        peaks = w.centroid(min_peaks=1)
+                        peaks = w.centroid(**centroid_kwargs)
                         mz2, int2, _ = _split_centroided_peaks(peaks)
                         if (not keep_empty_spectra) and mz2.size == 0:
                             continue

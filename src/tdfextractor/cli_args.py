@@ -269,6 +269,47 @@ def add_mzml_specific_args(parser: argparse.ArgumentParser) -> None:
         help="Bit width for intensity array values (default: 32).",
     )
 
+    _NOISE_FILTERS = ["none", "mad", "percentile", "histogram", "baseline", "iterative_median"]
+    parser.add_argument(
+        "--centroid-noise-filter",
+        choices=_NOISE_FILTERS,
+        default="none",
+        help=(
+            "Noise filter applied before centroiding. "
+            "'none' disables filtering (default); 'mad' uses median absolute deviation."
+        ),
+    )
+    parser.add_argument(
+        "--centroid-mz-tolerance",
+        type=float,
+        default=8.0,
+        help="m/z tolerance for peak centroiding (default: 8.0).",
+    )
+    parser.add_argument(
+        "--centroid-mz-tolerance-type",
+        choices=["ppm", "da"],
+        default="ppm",
+        help="Unit for --centroid-mz-tolerance (default: ppm).",
+    )
+    parser.add_argument(
+        "--centroid-im-tolerance",
+        type=float,
+        default=0.05,
+        help="Ion mobility tolerance for peak centroiding (default: 0.05).",
+    )
+    parser.add_argument(
+        "--centroid-im-tolerance-type",
+        choices=["relative", "absolute"],
+        default="relative",
+        help="Unit for --centroid-im-tolerance (default: relative).",
+    )
+    parser.add_argument(
+        "--centroid-min-peaks",
+        type=int,
+        default=5,
+        help="Minimum number of raw peaks required to form a centroided peak (default: 5).",
+    )
+
 
 def create_ms2_parser() -> argparse.ArgumentParser:
     """Create argument parser for MS2 extractor."""
