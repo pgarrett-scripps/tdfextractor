@@ -96,7 +96,7 @@ def generate_header(args: Ms2Args) -> str:
         "H\tMonoIsotopic PrecMz\tTrue\n"
     )
 
-    def _or_none(value):
+    def _or_none(value: object) -> object:
         return value if value is not None else "None"
 
     ms2_header = MS2_HEADER.format(
@@ -138,9 +138,7 @@ def write_ms2_file(args: Ms2Args) -> None:
     start_time = time.time()
 
     analysis_dir = args.analysis_dir
-    output_file = args.output_file or (
-        str(Path(analysis_dir) / Path(analysis_dir).stem) + ".ms2"
-    )
+    output_file = args.output_file or (str(Path(analysis_dir) / Path(analysis_dir).stem) + ".ms2")
 
     logger.info("Creating Ms2 Header")
     ms2_header = generate_header(args)
@@ -217,7 +215,7 @@ def write_ms2_file(args: Ms2Args) -> None:
     logger.info(f"Total Time: {total_time:.2f} seconds")
 
 
-def main():
+def main() -> int | None:
     """
     Command-line interface for MGF extraction from TimsTOF data.
     """

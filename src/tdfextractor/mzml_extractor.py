@@ -108,7 +108,7 @@ def _build_encoding_dict(
     }
 
 
-def _build_centroid_kwargs(args: MzmlArgs) -> dict:
+def _build_centroid_kwargs(args: MzmlArgs) -> dict[str, Any]:
     """Build a kwargs dict for tdfpy's centroid() from MzmlArgs centroid fields."""
     return {
         "mz_tolerance": args.centroid_mz_tolerance,
@@ -262,6 +262,21 @@ def _write_header(writer: MzMLWriter, analysis_dir: str) -> None:
                 "version": _ext_version,
                 "params": ["python-psims"],
             }
+        ]
+    )
+    writer.instrument_configuration_list(
+        [
+            writer.InstrumentConfiguration(
+                "IC1",
+                writer.ComponentList(
+                    [
+                        writer.Source(1, ["electrospray ionization"]),
+                        writer.Analyzer(2, ["quadrupole", "time-of-flight"]),
+                        writer.Detector(3, ["microchannel plate detector"]),
+                    ]
+                ),
+                ["instrument model"],
+            )
         ]
     )
     writer.data_processing_list(
@@ -591,9 +606,7 @@ def write_mzml_file(args: MzmlArgs) -> None:
     start_time = time.time()
 
     analysis_dir = args.analysis_dir
-    output_file = args.output_file or (
-        str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mzML"
-    )
+    output_file = args.output_file or (str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mzML")
 
     logger.info("Loading TDF metadata")
     pd_tdf = PandasTdf(str(Path(analysis_dir) / "analysis.tdf"))
@@ -648,7 +661,7 @@ def write_mzml_file(args: MzmlArgs) -> None:
     logger.info(f"mzML extraction complete in {total_time:.2f} seconds")
 
 
-def main():
+def main() -> int | None:
     """Command-line interface for mzML extraction from TimsTOF data."""
 
     parser = create_mzml_parser()

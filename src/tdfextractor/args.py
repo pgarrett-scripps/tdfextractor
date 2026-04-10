@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, fields
-from typing import Literal
+from typing import Any, Literal, Self
 
 EncodingBitWidth = Literal[32, 64]
 """Allowed bit widths for mzML binary array encoding."""
@@ -72,7 +72,7 @@ class BaseExtractorArgs:
     max_precursor_neutral_mass: float | None = None
 
     @classmethod
-    def from_namespace(cls, ns: argparse.Namespace):
+    def from_namespace(cls, ns: argparse.Namespace) -> Self:
         """Build an args instance from an argparse.Namespace.
 
         Only attributes whose names match a field on ``cls`` are pulled across.
@@ -83,7 +83,7 @@ class BaseExtractorArgs:
         filter sentinel and not an accidental override.
         """
         ns_dict = vars(ns)
-        kwargs: dict = {}
+        kwargs: dict[str, Any] = {}
         for f in fields(cls):
             if f.name == "output_file":
                 if "output" in ns_dict:
@@ -134,12 +134,10 @@ class MzmlArgs(BaseExtractorArgs):
         for name in ("mz_encoding", "intensity_encoding"):
             value = getattr(self, name)
             if value not in (32, 64):
-                raise ValueError(
-                    f"{name} must be 32 or 64, got {value!r}"
-                )
+                raise ValueError(f"{name} must be 32 or 64, got {value!r}")
 
     @classmethod
-    def from_namespace(cls, ns: argparse.Namespace) -> "MzmlArgs":
+    def from_namespace(cls, ns: argparse.Namespace) -> Self:
         obj = super().from_namespace(ns)
         # The CLI exposes --no-ms1 (store_true) but the dataclass uses
         # the positive include_ms1 form, so invert here.
@@ -148,4 +146,4 @@ class MzmlArgs(BaseExtractorArgs):
         # "none" string from argparse choices -> Python None
         if getattr(obj, "centroid_noise_filter", None) == "none":
             obj.centroid_noise_filter = None
-        return obj  # type: ignore[return-value]
+        return obj

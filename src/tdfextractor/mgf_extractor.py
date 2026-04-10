@@ -2,6 +2,7 @@
 ms2_extractor defines functions for generating ms2 files from DDA and PRM based .D folders
 """
 
+import argparse
 import logging
 import os
 import queue
@@ -24,9 +25,7 @@ def write_mgf_file(args: MgfArgs) -> None:
     start_time = time.time()
 
     analysis_dir = args.analysis_dir
-    output_file = args.output_file or (
-        str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mgf"
-    )
+    output_file = args.output_file or (str(Path(analysis_dir) / Path(analysis_dir).stem) + ".mgf")
 
     spectra_queue = queue.Queue(maxsize=100)
 
@@ -116,7 +115,12 @@ def write_mgf_file(args: MgfArgs) -> None:
     logger.info(f"Total Time: {total_time:.2f} seconds")
 
 
-def process_single_d_folder(d_folder, cli_ns, output_dir, output_name):
+def process_single_d_folder(
+    d_folder: Path,
+    cli_ns: argparse.Namespace,
+    output_dir: Path | None,
+    output_name: str | None,
+) -> bool:
     """Process a single .d folder with error handling.
 
     ``cli_ns`` is the raw argparse Namespace; a fresh :class:`MgfArgs` is
@@ -157,7 +161,7 @@ def process_single_d_folder(d_folder, cli_ns, output_dir, output_name):
         return False
 
 
-def main():
+def main() -> int | None:
     """
     Command-line interface for MGF extraction from TimsTOF data.
     """

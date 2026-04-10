@@ -3,6 +3,7 @@ Shared command line argument definitions for MS2 and MGF extractors.
 """
 
 import argparse
+import logging
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -353,7 +354,7 @@ def create_mzml_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_preset_settings(logger, args: argparse.Namespace) -> None:
+def apply_preset_settings(logger: logging.Logger, args: argparse.Namespace) -> None:
     """Apply preset settings based on flags."""
 
     if hasattr(args, "ip2") and args.ip2:
@@ -416,7 +417,7 @@ def apply_preset_settings(logger, args: argparse.Namespace) -> None:
             args.min_precursor_charge = 2
 
 
-def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> None:
+def log_common_args(logger: logging.Logger, args: argparse.Namespace, extractor_type: str) -> None:
     """Log common arguments for both extractors."""
 
     logger.info(f"{extractor_type} Extractor Arguments:")

@@ -111,11 +111,7 @@ def test_mgf_default_precision(mgf_dda_output: Path) -> None:
     """Default mz_precision=5 -> peak m/z should have 5 decimal places."""
     text = mgf_dda_output.read_text(encoding="utf-8")
     # First peak line we hit (numeric "<mz> <int>" pattern, not a KEY=value)
-    peak_line = next(
-        line
-        for line in text.splitlines()
-        if re.match(r"^\d+\.\d+ \d+", line)
-    )
+    peak_line = next(line for line in text.splitlines() if re.match(r"^\d+\.\d+ \d+", line))
     mz_str = peak_line.split()[0]
     assert len(mz_str.split(".")[1]) == 5
 
@@ -139,11 +135,7 @@ def test_mgf_custom_precision(tmp_path_factory, dda_d_folder: Path) -> None:
         )
     )
     text = out.read_text(encoding="utf-8")
-    peak_line = next(
-        line
-        for line in text.splitlines()
-        if re.match(r"^\d+\.\d+ \d+\.\d+$", line)
-    )
+    peak_line = next(line for line in text.splitlines() if re.match(r"^\d+\.\d+ \d+\.\d+$", line))
     mz_str, int_str = peak_line.split()
     assert len(mz_str.split(".")[1]) == 3
     assert len(int_str.split(".")[1]) == 2

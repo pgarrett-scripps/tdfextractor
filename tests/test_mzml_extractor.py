@@ -83,17 +83,10 @@ class TestHelpers:
 
     def test_resolve_compression_numpress_aliases(self) -> None:
         assert (
-            _resolve_compression("numpress-linear")
-            == "MS-Numpress linear prediction compression"
+            _resolve_compression("numpress-linear") == "MS-Numpress linear prediction compression"
         )
-        assert (
-            _resolve_compression("numpress-slof")
-            == "MS-Numpress short logged float compression"
-        )
-        assert (
-            _resolve_compression("numpress-pic")
-            == "MS-Numpress positive integer compression"
-        )
+        assert _resolve_compression("numpress-slof") == "MS-Numpress short logged float compression"
+        assert _resolve_compression("numpress-pic") == "MS-Numpress positive integer compression"
 
     def test_resolve_compression_unknown_raises(self) -> None:
         with pytest.raises(ValueError):
@@ -150,8 +143,7 @@ def test_ms1_carries_mean_ion_mobility_array(request, fixture_name: str) -> None
     hits = sum(
         1
         for s in _iter_spectra(root)
-        if _ms_level(s) == 1
-        and "mean inverse reduced ion mobility array" in _binary_array_names(s)
+        if _ms_level(s) == 1 and "mean inverse reduced ion mobility array" in _binary_array_names(s)
     )
     assert hits > 0, "no MS1 spectra carried the mean-IM mobility array"
 
@@ -173,9 +165,9 @@ def test_compression_param_plumbed_to_mz_array(
         comps = _array_compressions(spec)
         if "m/z array" not in comps:
             continue
-        assert (
-            comps.get("m/z array") == "no compression"
-        ), f"expected uncompressed m/z array, got {comps!r}"
+        assert comps.get("m/z array") == "no compression", (
+            f"expected uncompressed m/z array, got {comps!r}"
+        )
         saw_mz = True
         break
     assert saw_mz, "no spectrum with an m/z array was found"

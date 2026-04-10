@@ -107,6 +107,7 @@ def mzml_prm_output(tmp_path_factory, prm_d_folder: Path) -> Path:
             output_file=str(out),
             min_precursor_rt=PRM_MIN_RT,
             max_precursor_rt=PRM_MAX_RT,
+            centroid_min_peaks=1,
         )
     )
     return out

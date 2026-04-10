@@ -59,9 +59,7 @@ def test_mzml_args_rejects_invalid_intensity_encoding(bad: int) -> None:
 
 def test_ms2_from_namespace_basic() -> None:
     parser = create_ms2_parser()
-    ns = parser.parse_args(
-        ["/tmp/foo.d", "--top-n-peaks", "150", "--remove-precursor"]
-    )
+    ns = parser.parse_args(["/tmp/foo.d", "--top-n-peaks", "150", "--remove-precursor"])
     args = Ms2Args.from_namespace(ns)
     assert isinstance(args, Ms2Args)
     assert args.analysis_dir == "/tmp/foo.d"
@@ -79,9 +77,7 @@ def test_ms2_from_namespace_output_alias() -> None:
 
 def test_ms2_from_namespace_precision_flags() -> None:
     parser = create_ms2_parser()
-    ns = parser.parse_args(
-        ["/tmp/foo.d", "--mz-precision", "3", "--intensity-precision", "2"]
-    )
+    ns = parser.parse_args(["/tmp/foo.d", "--mz-precision", "3", "--intensity-precision", "2"])
     args = Ms2Args.from_namespace(ns)
     assert args.mz_precision == 3
     assert args.intensity_precision == 2
@@ -125,9 +121,7 @@ def test_mzml_from_namespace_inverts_no_ms1() -> None:
 
 def test_mzml_from_namespace_preserves_encoding_flags() -> None:
     parser = create_mzml_parser()
-    ns = parser.parse_args(
-        ["/tmp/foo.d", "--mz-encoding", "32", "--intensity-encoding", "64"]
-    )
+    ns = parser.parse_args(["/tmp/foo.d", "--mz-encoding", "32", "--intensity-encoding", "64"])
     args = MzmlArgs.from_namespace(ns)
     assert args.mz_encoding == 32
     assert args.intensity_encoding == 64

@@ -12,7 +12,7 @@ from .args import (
     Ms2Args,
     MzmlArgs,
 )
-from .mgf_exctractor import write_mgf_file
+from .mgf_extractor import write_mgf_file
 from .ms2_extractor import write_ms2_file
 from .mzml_extractor import write_mzml_file
 from .utils import get_ms2_dda_content, get_ms2_dda_spectra, get_tdf_df

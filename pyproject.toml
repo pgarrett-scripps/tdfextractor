@@ -37,8 +37,10 @@ license = {file = "LICENSE"}
 keywords = ["bruker", "timstof", "mass-spectrometry", "proteomics", "tdf", "ms2", "mgf", "mzml", "pasef"]
 
 [project.urls]
+Homepage = "https://github.com/pgarrett-scripps/tdfextractor"
 Repository = "https://github.com/pgarrett-scripps/tdfextractor"
 "Bug Tracker" = "https://github.com/pgarrett-scripps/tdfextractor/issues"
+Changelog = "https://github.com/pgarrett-scripps/tdfextractor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Optional compression backends for the mzML extractor. numpress-* compression
@@ -49,10 +51,10 @@ compression = [
 ]
 
 [project.scripts]
-mgf-extractor = "tdfextractor.mgf_exctractor:main"
+mgf-extractor = "tdfextractor.mgf_extractor:main"
 ms2-extractor = "tdfextractor.ms2_extractor:main"
 mzml-extractor = "tdfextractor.mzml_extractor:main"
-mgf-ex = "tdfextractor.mgf_exctractor:main"
+mgf-ex = "tdfextractor.mgf_extractor:main"
 ms2-ex = "tdfextractor.ms2_extractor:main"
 mzml-ex = "tdfextractor.mzml_extractor:main"
 
@@ -68,7 +70,7 @@ include = [
     "tests",
     "README.md",
     "LICENSE",
-    "CHANGLOG.md",
+    "CHANGELOG.md",
 ]
 
 [dependency-groups]
@@ -98,13 +100,4 @@ target-version = "py312"
 # rather than vendoring stubs.
 unresolved-import = "ignore"
 
-[tool.ty.src]
-# Legacy modules that predate the modernization pass and still have type
-# issues against the current tdfpy / serenipy typings. They should be
-# cleaned up in a follow-up typing pass rather than rewritten wholesale
-# here.
-exclude = [
-    "src/tdfextractor/mgf_exctractor.py",
-    "src/tdfextractor/ms2_extractor.py",
-    "src/tdfextractor/utils.py",
-]
+

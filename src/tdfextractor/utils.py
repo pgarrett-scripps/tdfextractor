@@ -5,6 +5,7 @@ Utility based functions for ms2 extractor
 import logging
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -57,10 +58,10 @@ def map_parent_id_to_precursors(precursors_df: pd.DataFrame) -> dict[int, list[i
         dict: A dictionary mapping parent IDs to precursor IDs.
     """
     parent_grps = precursors_df.groupby(by="Parent")
-    return {parent_id: grp["Id"] for parent_id, grp in parent_grps}
+    return {int(str(parent_id)): grp["Id"] for parent_id, grp in parent_grps}
 
 
-def get_ms1_frames_ids(frames_df: pd.DataFrame) -> np.array:
+def get_ms1_frames_ids(frames_df: pd.DataFrame) -> np.ndarray:
     """
     Gets MS1 frame IDs.
 
@@ -74,7 +75,7 @@ def get_ms1_frames_ids(frames_df: pd.DataFrame) -> np.array:
     return frames_df["Id"].values
 
 
-def get_ms2_frames_ids(frames_df: pd.DataFrame) -> np.array:
+def get_ms2_frames_ids(frames_df: pd.DataFrame) -> np.ndarray:
     """
     Gets MS2 frame IDs.
 
@@ -103,7 +104,7 @@ def map_precursor_to_ip2_scan_number(
     """
     precursor_map = map_parent_id_to_precursors(precursors_df)
     all_ms1_list = get_ms1_frames_ids(frames_df)
-    _, ms2_map = map_frame_id_to_ms1_scan(precursor_map, all_ms1_list)
+    _, ms2_map = map_frame_id_to_ms1_scan(precursor_map, all_ms1_list.tolist())
     return {
         prec_id: ms2_map[parent_id][prec_id]
         for parent_id in ms2_map
@@ -123,7 +124,7 @@ def calculate_mass(mz: float, charge: int) -> float:
     return mz * charge
 
 
-def batch_iterator(input_list: list, batch_size: int):
+def batch_iterator(input_list: list[Any], batch_size: int) -> Generator[list[Any], None, None]:
     for i in range(0, len(input_list), batch_size):
         yield input_list[i : i + batch_size]
 
@@ -374,23 +375,23 @@ def get_ms2_dda_content(
                 ms2_spectra.ce = round(precursor_row["CollisionEnergy"], 1)
                 ms2_spectra.iso_width = round(precursor_row["IsolationWidth"], 1)
                 ms2_spectra.iso_mz = round(precursor_row["IsolationMz"], 4)
-                ms2_spectra.scan_begin = round(float(precursor_row["ScanNumBegin"]), 4)
-                ms2_spectra.scan_end = round(float(precursor_row["ScanNumEnd"]), 4)
-                ms2_spectra.info["Accumulation_Time"] = round(
-                    float(precursor_row["AccumulationTime"]), 4
+                ms2_spectra.scan_begin = int(precursor_row["ScanNumBegin"])
+                ms2_spectra.scan_end = int(precursor_row["ScanNumEnd"])
+                ms2_spectra.info["Accumulation_Time"] = str(
+                    round(float(precursor_row["AccumulationTime"]), 4)
                 )
-                ms2_spectra.info["Ramp_Time"] = round(float(precursor_row["RampTime"]), 4)
-                ms2_spectra.info["PASEF_Scans"] = int(precursor_row["count"])
+                ms2_spectra.info["Ramp_Time"] = str(round(float(precursor_row["RampTime"]), 4))
+                ms2_spectra.info["PASEF_Scans"] = str(int(precursor_row["count"]))
 
                 if "Pressure" in precursor_row:
-                    ms2_spectra.info["Pressure"] = round(float(precursor_row["Pressure"]), 4)
+                    ms2_spectra.info["Pressure"] = str(round(float(precursor_row["Pressure"]), 4))
 
                 ook0_range = td.scanNumToOneOverK0(
                     int(precursor_row["Id_Frame"]),
-                    [ms2_spectra.scan_begin, ms2_spectra.scan_end],
+                    [float(ms2_spectra.scan_begin or 0), float(ms2_spectra.scan_end or 0)],
                 )
-                ms2_spectra.info["OOK0_Begin"] = round(float(ook0_range[0]), 4)
-                ms2_spectra.info["OOK0_End"] = round(float(ook0_range[1]), 4)
+                ms2_spectra.info["OOK0_Begin"] = str(round(float(ook0_range[0]), 4))
+                ms2_spectra.info["OOK0_End"] = str(round(float(ook0_range[1]), 4))
 
                 ms2_spectra_data = list(
                     zip(pasef_ms_ms[precursor_id][0], pasef_ms_ms[precursor_id][1])
@@ -543,12 +544,15 @@ def get_ms2_prm_content(
             if max_precursor_rt is not None and float(row["Time_Frame"]) > max_precursor_rt:
                 continue
 
-            mz_list, area_list = td.extractCentroidedSpectrumForFrame(
+            centroid_result = td.extractCentroidedSpectrumForFrame(
                 frame_id=int(row["Frame"]),
                 scan_begin=int(row["ScanNumBegin"]),
                 scan_end=int(row["ScanNumEnd"]),
                 peak_picker_resolution=120000,
             )
+            if centroid_result is None:
+                continue
+            mz_list, area_list = centroid_result
 
             ms2_spectra = Ms2Spectra(
                 low_scan=int(row["Frame"]),
@@ -571,14 +575,15 @@ def get_ms2_prm_content(
             ms2_spectra.iso_width = float(row["IsolationWidth"])
             ms2_spectra.iso_mz = float(row["IsolationMz"])
             ms2_spectra.rt = float(row["Time_Frame"])
-            ms2_spectra.scan_begin = float(row["ScanNumBegin"])
-            ms2_spectra.scan_end = float(row["ScanNumEnd"])
+            ms2_spectra.scan_begin = int(row["ScanNumBegin"])
+            ms2_spectra.scan_end = int(row["ScanNumEnd"])
 
             ook0_range = td.scanNumToOneOverK0(
-                int(row["Frame"]), [ms2_spectra.scan_begin, ms2_spectra.scan_end]
+                int(row["Frame"]),
+                [float(ms2_spectra.scan_begin or 0), float(ms2_spectra.scan_end or 0)],
             )
-            ms2_spectra.info["OOK0_Begin"] = ook0_range[0]
-            ms2_spectra.info["OOK0_End"] = ook0_range[1]
+            ms2_spectra.info["OOK0_Begin"] = str(ook0_range[0])
+            ms2_spectra.info["OOK0_End"] = str(ook0_range[1])
 
             ms2_spectra_data = list(zip(list(mz_list), list(area_list)))
 
