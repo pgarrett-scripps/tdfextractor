@@ -1,37 +1,103 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "tdfextractor"
 dynamic = ["version"]
-description = "extract ms2/mgf files from bruker d folders"
+description = "Extract MS2, MGF, and mzML files from Bruker timsTOF .d folders"
 authors = [
     {name = "Patrick Garrett", email = "pgarrett@scripps.edu"},
 ]
 dependencies = [
-    "tdfpy==0.1.7",
-    "serenipy==0.3.0",
-    "tqdm"
+    "tdfpy>=1.2.0",
+    "serenipy>=0.4.0",
+    "psims>=1.3.5",
+    "numpy",
+    "pandas",
+    "tqdm",
+    "numba>=0.65.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Intended Audience :: Science/Research",
+    "Typing :: Typed",
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 license = {file = "LICENSE"}
+keywords = ["bruker", "timstof", "mass-spectrometry", "proteomics", "tdf", "ms2", "mgf", "mzml", "pasef"]
+
+[project.urls]
+Homepage = "https://github.com/tacular-omics/tdfextractor"
+Repository = "https://github.com/tacular-omics/tdfextractor"
+"Bug Tracker" = "https://github.com/tacular-omics/tdfextractor/issues"
+Changelog = "https://github.com/tacular-omics/tdfextractor/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+# Optional compression backends for the mzML extractor. numpress-* compression
+# modes need pynumpress; zstd needs pyzstd.
+compression = [
+    "pynumpress>=0.0.9",
+    "pyzstd>=0.16",
+]
 
 [project.scripts]
-mgf-extractor = "tdfextractor.mgf_exctractor:main"
+mgf-extractor = "tdfextractor.mgf_extractor:main"
 ms2-extractor = "tdfextractor.ms2_extractor:main"
-mgf-ex = "tdfextractor.mgf_exctractor:main"
+mzml-extractor = "tdfextractor.mzml_extractor:main"
+mgf-ex = "tdfextractor.mgf_extractor:main"
 ms2-ex = "tdfextractor.ms2_extractor:main"
+mzml-ex = "tdfextractor.mzml_extractor:main"
+
+[tool.hatch.version]
+path = "src/tdfextractor/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tdfextractor"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/tdfextractor",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ty>=0.0.9",
+    "ruff>=0.14.3",
+    "pyupgrade>=3.21.0",
+    "pynumpress>=0.0.9",
+    "pyzstd>=0.16",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: end-to-end extractor tests that read .d folders. Run with `pytest -m \"not slow\"` to skip.",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ty.rules]
+# psims does not ship a PEP 561 marker, so every `from psims.mzml.writer
+# import ...` would otherwise fail the checker. Ignore resolution errors
+# rather than vendoring stubs.
+unresolved-import = "ignore"
 
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.dynamic]
-version = {attr = "tdfextractor.__version__"}

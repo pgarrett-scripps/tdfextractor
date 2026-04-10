@@ -3,14 +3,13 @@ Shared command line argument definitions for MS2 and MGF extractors.
 """
 
 import argparse
+import logging
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     """Add common arguments shared between MS2 and MGF extractors."""
 
-    parser.add_argument(
-        "analysis_dir", type=str, help="Path to the .D analysis directory"
-    )
+    parser.add_argument("analysis_dir", type=str, help="Path to the .D analysis directory")
 
     parser.add_argument(
         "-o",
@@ -159,15 +158,15 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mz-precision",
         type=int,
-        default=None,
-        help="Number of decimal places for m/z values (default: 4)",
+        default=5,
+        help="Number of decimal places for m/z values",
     )
 
     parser.add_argument(
         "--intensity-precision",
         type=int,
-        default=None,
-        help="Number of decimal places for intensity values (default: 0)",
+        default=0,
+        help="Number of decimal places for intensity values",
     )
 
     parser.add_argument(
@@ -176,9 +175,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
         help="Keep spectra with no peaks (default: False)",
     )
 
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Enable verbose logging"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
 
     parser.add_argument(
         "--overwrite",
@@ -214,6 +211,107 @@ def add_mgf_specific_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_mzml_specific_args(parser: argparse.ArgumentParser) -> None:
+    """Add mzML-specific arguments."""
+
+    parser.add_argument(
+        "--no-ms1",
+        action="store_true",
+        help="Skip MS1 spectra and write only MS2 PASEF spectra to the mzML file",
+    )
+
+    _COMPRESSORS = [
+        "none",
+        "zlib",
+        "zstd",
+        "numpress-linear",
+        "numpress-slof",
+        "numpress-pic",
+    ]
+    parser.add_argument(
+        "--mz-compression",
+        choices=_COMPRESSORS,
+        default="zlib",
+        help=(
+            "Compression for m/z arrays. zstd requires zstandard; numpress-* requires pynumpress."
+        ),
+    )
+    parser.add_argument(
+        "--intensity-compression",
+        choices=_COMPRESSORS,
+        default="zlib",
+        help="Compression for intensity arrays.",
+    )
+    parser.add_argument(
+        "--mobility-compression",
+        choices=_COMPRESSORS,
+        default="zlib",
+        help=(
+            "Compression for the per-peak mean inverse reduced ion mobility "
+            "array written alongside MS1 spectra."
+        ),
+    )
+    # The two encoding flags below correspond to the
+    # ``tdfextractor.args.EncodingBitWidth`` Literal type. argparse cannot
+    # consume a Literal directly, so the runtime constraint lives in
+    # ``choices`` while the static type lives on :class:`MzmlArgs`.
+    parser.add_argument(
+        "--mz-encoding",
+        type=int,
+        choices=[32, 64],
+        default=64,
+        help="Bit width for m/z array values (default: 64).",
+    )
+    parser.add_argument(
+        "--intensity-encoding",
+        type=int,
+        choices=[32, 64],
+        default=32,
+        help="Bit width for intensity array values (default: 32).",
+    )
+
+    _NOISE_FILTERS = ["none", "mad", "percentile", "histogram", "baseline", "iterative_median"]
+    parser.add_argument(
+        "--centroid-noise-filter",
+        choices=_NOISE_FILTERS,
+        default="none",
+        help=(
+            "Noise filter applied before centroiding. "
+            "'none' disables filtering (default); 'mad' uses median absolute deviation."
+        ),
+    )
+    parser.add_argument(
+        "--centroid-mz-tolerance",
+        type=float,
+        default=8.0,
+        help="m/z tolerance for peak centroiding (default: 8.0).",
+    )
+    parser.add_argument(
+        "--centroid-mz-tolerance-type",
+        choices=["ppm", "da"],
+        default="ppm",
+        help="Unit for --centroid-mz-tolerance (default: ppm).",
+    )
+    parser.add_argument(
+        "--centroid-im-tolerance",
+        type=float,
+        default=0.05,
+        help="Ion mobility tolerance for peak centroiding (default: 0.05).",
+    )
+    parser.add_argument(
+        "--centroid-im-tolerance-type",
+        choices=["relative", "absolute"],
+        default="relative",
+        help="Unit for --centroid-im-tolerance (default: relative).",
+    )
+    parser.add_argument(
+        "--centroid-min-peaks",
+        type=int,
+        default=5,
+        help="Minimum number of raw peaks required to form a centroided peak (default: 5).",
+    )
+
+
 def create_ms2_parser() -> argparse.ArgumentParser:
     """Create argument parser for MS2 extractor."""
 
@@ -242,7 +340,21 @@ def create_mgf_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def apply_preset_settings(logger, args: argparse.Namespace) -> None:
+def create_mzml_parser() -> argparse.ArgumentParser:
+    """Create argument parser for mzML extractor."""
+
+    parser = argparse.ArgumentParser(
+        description="Extract mzML files from TimsTOF .D folders (uses psims)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    add_common_args(parser)
+    add_mzml_specific_args(parser)
+
+    return parser
+
+
+def apply_preset_settings(logger: logging.Logger, args: argparse.Namespace) -> None:
     """Apply preset settings based on flags."""
 
     if hasattr(args, "ip2") and args.ip2:
@@ -254,9 +366,7 @@ def apply_preset_settings(logger, args: argparse.Namespace) -> None:
         else:
             args.min_precursor_charge = 2
         if args.top_n_peaks is not None:
-            logger.warning(
-                f"IP2 preset overridden... setting top_n_peaks to {args.top_n_peaks}"
-            )
+            logger.warning(f"IP2 preset overridden... setting top_n_peaks to {args.top_n_peaks}")
         else:
             args.top_n_peaks = 500
 
@@ -264,7 +374,7 @@ def apply_preset_settings(logger, args: argparse.Namespace) -> None:
         # Set Casanovo specific defaults
 
         args.remove_precursor = True
-        
+
         if args.precursor_peak_width is not None:
             logger.warning(
                 f"Casanovo preset overridden... setting precursor_peak_width to {args.precursor_peak_width}"
@@ -307,7 +417,7 @@ def apply_preset_settings(logger, args: argparse.Namespace) -> None:
             args.min_precursor_charge = 2
 
 
-def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> None:
+def log_common_args(logger: logging.Logger, args: argparse.Namespace, extractor_type: str) -> None:
     """Log common arguments for both extractors."""
 
     logger.info(f"{extractor_type} Extractor Arguments:")
@@ -316,9 +426,7 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
     logger.info(f"  Remove Precursor: {args.remove_precursor}")
     logger.info(f"  Precursor Peak Width: {args.precursor_peak_width} Da")
     logger.info(f"  Batch Size: {args.batch_size}")
-    logger.info(
-        f"  Top N Peaks: {args.top_n_peaks if args.top_n_peaks is not None else 'All'}"
-    )
+    logger.info(f"  Top N Peaks: {args.top_n_peaks if args.top_n_peaks is not None else 'All'}")
     logger.info(
         f"  Min Spectra Intensity: {args.min_spectra_intensity if args.min_spectra_intensity is not None else 'None'}"
     )
@@ -380,3 +488,17 @@ def log_common_args(logger, args: argparse.Namespace, extractor_type: str) -> No
 
     if hasattr(args, "casanovo") and args.casanovo:
         logger.info(f"  Casanovo Preset: {args.casanovo}")
+
+    # mzML-only knobs
+    if hasattr(args, "no_ms1"):
+        logger.info(f"  Include MS1: {not args.no_ms1}")
+    if hasattr(args, "mz_compression"):
+        logger.info(f"  m/z Compression: {args.mz_compression}")
+    if hasattr(args, "intensity_compression"):
+        logger.info(f"  Intensity Compression: {args.intensity_compression}")
+    if hasattr(args, "mobility_compression"):
+        logger.info(f"  Mobility Compression: {args.mobility_compression}")
+    if hasattr(args, "mz_encoding"):
+        logger.info(f"  m/z Encoding: {args.mz_encoding}-bit")
+    if hasattr(args, "intensity_encoding"):
+        logger.info(f"  Intensity Encoding: {args.intensity_encoding}-bit")

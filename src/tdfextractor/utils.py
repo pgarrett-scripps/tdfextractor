@@ -3,21 +3,23 @@ Utility based functions for ms2 extractor
 """
 
 import logging
+from collections.abc import Generator
 from pathlib import Path
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from tdfpy import timsdata
-from tdfpy.pandas_tdf import PandasTdf
-from serenipy.ms2 import Ms2Spectra
+from serenipy import Ms2Spectra
+from tdfpy import PandasTdf, timsdata_connect
+from tdfpy.timsdata import oneOverK0ToCCSforMz
 from tqdm import tqdm
+
 from .constants import PROTON_MASS
 
 
 def map_frame_id_to_ms1_scan(
-    parent_precursor_map: Dict[int, List[int]], ms1_ids: List[int]
-) -> Tuple[Dict[int, int], Dict[int, Dict[int, int]]]:
+    parent_precursor_map: dict[int, list[int]], ms1_ids: list[int]
+) -> tuple[dict[int, int], dict[int, dict[int, int]]]:
     """
     Maps each frame ID to its corresponding MS1 scan and MS2 scans.
 
@@ -39,15 +41,13 @@ def map_frame_id_to_ms1_scan(
         if frame_id in parent_precursor_map:
             if frame_id not in ms2_map:
                 ms2_map[frame_id] = {}
-            for count, prec_id in enumerate(
-                parent_precursor_map[frame_id], prev_scan + 1
-            ):
+            for count, prec_id in enumerate(parent_precursor_map[frame_id], prev_scan + 1):
                 ms2_map[frame_id][prec_id] = count
             prev_scan += len(parent_precursor_map[frame_id])
     return frame_id_ms1_scan_map, ms2_map
 
 
-def map_parent_id_to_precursors(precursors_df: pd.DataFrame) -> Dict[int, List[int]]:
+def map_parent_id_to_precursors(precursors_df: pd.DataFrame) -> dict[int, list[int]]:
     """
     Creates a mapping from parent ID to precursor IDs.
 
@@ -58,10 +58,10 @@ def map_parent_id_to_precursors(precursors_df: pd.DataFrame) -> Dict[int, List[i
         dict: A dictionary mapping parent IDs to precursor IDs.
     """
     parent_grps = precursors_df.groupby(by="Parent")
-    return {parent_id: grp["Id"] for parent_id, grp in parent_grps}
+    return {int(str(parent_id)): grp["Id"] for parent_id, grp in parent_grps}
 
 
-def get_ms1_frames_ids(frames_df: pd.DataFrame) -> np.array:
+def get_ms1_frames_ids(frames_df: pd.DataFrame) -> np.ndarray:
     """
     Gets MS1 frame IDs.
 
@@ -75,7 +75,7 @@ def get_ms1_frames_ids(frames_df: pd.DataFrame) -> np.array:
     return frames_df["Id"].values
 
 
-def get_ms2_frames_ids(frames_df: pd.DataFrame) -> np.array:
+def get_ms2_frames_ids(frames_df: pd.DataFrame) -> np.ndarray:
     """
     Gets MS2 frame IDs.
 
@@ -91,7 +91,7 @@ def get_ms2_frames_ids(frames_df: pd.DataFrame) -> np.array:
 
 def map_precursor_to_ip2_scan_number(
     precursors_df: pd.DataFrame, frames_df: pd.DataFrame
-) -> Dict[int, int]:
+) -> dict[int, int]:
     """
     Maps each precursor ID to its IP2 scan number.
 
@@ -104,7 +104,7 @@ def map_precursor_to_ip2_scan_number(
     """
     precursor_map = map_parent_id_to_precursors(precursors_df)
     all_ms1_list = get_ms1_frames_ids(frames_df)
-    _, ms2_map = map_frame_id_to_ms1_scan(precursor_map, all_ms1_list)
+    _, ms2_map = map_frame_id_to_ms1_scan(precursor_map, all_ms1_list.tolist())
     return {
         prec_id: ms2_map[parent_id][prec_id]
         for parent_id in ms2_map
@@ -124,25 +124,25 @@ def calculate_mass(mz: float, charge: int) -> float:
     return mz * charge
 
 
-def batch_iterator(input_list: List, batch_size: int):
+def batch_iterator(input_list: list[Any], batch_size: int) -> Generator[list[Any], None, None]:
     for i in range(0, len(input_list), batch_size):
         yield input_list[i : i + batch_size]
 
 
 def get_tdf_df(
     analysis_dir: str,
-    min_precursor_intensity: Optional[float] = None,
-    max_precursor_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
+    min_precursor_intensity: float | None = None,
+    max_precursor_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
 ) -> pd.DataFrame:
 
     analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
@@ -180,9 +180,7 @@ def get_tdf_df(
         suffixes=("_Precursor", "_PasefFrameMsmsInfo"),
     ).drop("Precursor", axis=1)
 
-    precursor_to_scan_number = map_precursor_to_ip2_scan_number(
-        precursors_df, frames_df
-    )
+    precursor_to_scan_number = map_precursor_to_ip2_scan_number(precursors_df, frames_df)
     merged_df["IP2ScanNumber"] = merged_df["Id_Precursor"].map(precursor_to_scan_number)
     merged_df.dropna(subset=["MonoisotopicMz", "Charge"], inplace=True)
 
@@ -285,18 +283,14 @@ def get_tdf_df(
             f"Filtered {filtered_count} precursors by max_precursor_intensity <= {max_precursor_intensity} (remaining: {after_filter})"
         )
 
-    with timsdata.timsdata_connect(analysis_dir) as td:
+    with timsdata_connect(analysis_dir) as td:
         merged_df["OOK0"] = merged_df.apply(
-            lambda row: td.scanNumToOneOverK0(int(row["Parent"]), [row["ScanNumber"]])[
-                0
-            ],
+            lambda row: td.scanNumToOneOverK0(int(row["Parent"]), [row["ScanNumber"]])[0],
             axis=1,
         )
 
     merged_df["CCS"] = merged_df.apply(
-        lambda row: timsdata.oneOverK0ToCCSforMz(
-            row["OOK0"], int(row["Charge"]), row["MonoisotopicMz"]
-        ),
+        lambda row: oneOverK0ToCCSforMz(row["OOK0"], int(row["Charge"]), row["MonoisotopicMz"]),
         axis=1,
     )
 
@@ -321,7 +315,7 @@ def get_tdf_df(
     final_rows = len(merged_df)
     total_filtered = initial_rows - final_rows
     logging.info(
-        f"Total precursors filtered: {total_filtered} ({(total_filtered/initial_rows)*100:.1f}%), Final count: {final_rows}"
+        f"Total precursors filtered: {total_filtered} ({(total_filtered / initial_rows) * 100:.1f}%), Final count: {final_rows}"
     )
     return merged_df
 
@@ -332,28 +326,23 @@ def get_ms2_dda_content(
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
+    top_n_peaks: int | None = None,
+    min_spectra_intensity: float | None = None,
+    max_spectra_intensity: float | None = None,
+    min_spectra_mz: float | None = None,
+    max_spectra_mz: float | None = None,
 ) -> Generator[Ms2Spectra, None, None]:
 
-    with timsdata.timsdata_connect(analysis_dir) as td:
-
+    with timsdata_connect(analysis_dir) as td:
         for precursor_batch in batch_iterator(
             input_list=list(merged_df.iterrows()), batch_size=batch_size
         ):
             pasef_ms_ms = None
             pasef_ms_ms = td.readPasefMsMs(
-                [
-                    int(precursor_row["Id_Precursor"])
-                    for _, precursor_row in precursor_batch
-                ]
+                [int(precursor_row["Id_Precursor"]) for _, precursor_row in precursor_batch]
             )
 
             for _, precursor_row in precursor_batch:
-
                 precursor_id = int(precursor_row["Id_Precursor"])
                 parent_id = int(precursor_row["Parent"])
                 charge = int(precursor_row["Charge"])
@@ -386,27 +375,23 @@ def get_ms2_dda_content(
                 ms2_spectra.ce = round(precursor_row["CollisionEnergy"], 1)
                 ms2_spectra.iso_width = round(precursor_row["IsolationWidth"], 1)
                 ms2_spectra.iso_mz = round(precursor_row["IsolationMz"], 4)
-                ms2_spectra.scan_begin = round(float(precursor_row["ScanNumBegin"]), 4)
-                ms2_spectra.scan_end = round(float(precursor_row["ScanNumEnd"]), 4)
-                ms2_spectra.info["Accumulation_Time"] = round(
-                    float(precursor_row["AccumulationTime"]), 4
+                ms2_spectra.scan_begin = int(precursor_row["ScanNumBegin"])
+                ms2_spectra.scan_end = int(precursor_row["ScanNumEnd"])
+                ms2_spectra.info["Accumulation_Time"] = str(
+                    round(float(precursor_row["AccumulationTime"]), 4)
                 )
-                ms2_spectra.info["Ramp_Time"] = round(
-                    float(precursor_row["RampTime"]), 4
-                )
-                ms2_spectra.info["PASEF_Scans"] = int(precursor_row["count"])
+                ms2_spectra.info["Ramp_Time"] = str(round(float(precursor_row["RampTime"]), 4))
+                ms2_spectra.info["PASEF_Scans"] = str(int(precursor_row["count"]))
 
                 if "Pressure" in precursor_row:
-                    ms2_spectra.info["Pressure"] = round(
-                        float(precursor_row["Pressure"]), 4
-                    )
+                    ms2_spectra.info["Pressure"] = str(round(float(precursor_row["Pressure"]), 4))
 
                 ook0_range = td.scanNumToOneOverK0(
                     int(precursor_row["Id_Frame"]),
-                    [ms2_spectra.scan_begin, ms2_spectra.scan_end],
+                    [float(ms2_spectra.scan_begin or 0), float(ms2_spectra.scan_end or 0)],
                 )
-                ms2_spectra.info["OOK0_Begin"] = round(float(ook0_range[0]), 4)
-                ms2_spectra.info["OOK0_End"] = round(float(ook0_range[1]), 4)
+                ms2_spectra.info["OOK0_Begin"] = str(round(float(ook0_range[0]), 4))
+                ms2_spectra.info["OOK0_End"] = str(round(float(ook0_range[1]), 4))
 
                 ms2_spectra_data = list(
                     zip(pasef_ms_ms[precursor_id][0], pasef_ms_ms[precursor_id][1])
@@ -421,7 +406,6 @@ def get_ms2_dda_content(
 
                 # Apply min_intensity filter
                 if min_spectra_intensity is not None:
-
                     if (
                         isinstance(min_spectra_intensity, float)
                         and 0.0 <= min_spectra_intensity <= 1.0
@@ -472,14 +456,11 @@ def get_ms2_dda_content(
                     min_prec_mz = precursor_mz - precursor_peak_width
                     max_precursor_mz = precursor_mz + precursor_peak_width
 
-                    precursor_mask = ~(
-                        (mz_array >= min_prec_mz) & (mz_array <= max_precursor_mz)
-                    )
+                    precursor_mask = ~((mz_array >= min_prec_mz) & (mz_array <= max_precursor_mz))
                     mz_array = mz_array[precursor_mask]
                     intensity_array = intensity_array[precursor_mask]
 
                 if top_n_peaks is not None and len(intensity_array) > top_n_peaks:
-
                     if top_n_peaks < 0:
                         raise ValueError("top_n_peaks must be a positive integer")
 
@@ -488,9 +469,7 @@ def get_ms2_dda_content(
                         intensity_array = np.array([])
                     elif top_n_peaks > len(intensity_array):
                         # Get indices of top N intensities
-                        top_indices = np.argpartition(intensity_array, -top_n_peaks)[
-                            -top_n_peaks:
-                        ]
+                        top_indices = np.argpartition(intensity_array, -top_n_peaks)[-top_n_peaks:]
                         mz_array = mz_array[top_indices]
                         intensity_array = intensity_array[top_indices]
 
@@ -508,29 +487,28 @@ def get_ms2_dda_content(
                 yield ms2_spectra
 
 
-
 def get_ms2_prm_content(
     analysis_dir: str,
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_spectra: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
+    top_n_spectra: int | None = None,
+    min_spectra_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
 ) -> Generator[Ms2Spectra, None, None]:
-    
+
     # TODO: Integrate
 
-    with timsdata.timsdata_connect(analysis_dir) as td:
+    with timsdata_connect(analysis_dir) as td:
         analysis_tdf_path = str(Path(analysis_dir) / "analysis.tdf")
         merged_df = pd.merge(
             PandasTdf(analysis_tdf_path).prm_frame_msms_info,
@@ -549,48 +527,32 @@ def get_ms2_prm_content(
         for _, row in tqdm(
             merged_df.iterrows(), desc="Generating MS2 Spectra", total=len(merged_df)
         ):
-
-            if (
-                min_precursor_charge is not None
-                and int(row["Charge"]) < min_precursor_charge
-            ):
+            if min_precursor_charge is not None and int(row["Charge"]) < min_precursor_charge:
                 continue
-            if (
-                max_precursor_charge is not None
-                and int(row["Charge"]) > max_precursor_charge
-            ):
+            if max_precursor_charge is not None and int(row["Charge"]) > max_precursor_charge:
                 continue
 
             # Apply m/z filters
-            if (
-                min_precursor_mz is not None
-                and float(row["IsolationMz"]) < min_precursor_mz
-            ):
+            if min_precursor_mz is not None and float(row["IsolationMz"]) < min_precursor_mz:
                 continue
-            if (
-                max_precursor_mz is not None
-                and float(row["IsolationMz"]) > max_precursor_mz
-            ):
+            if max_precursor_mz is not None and float(row["IsolationMz"]) > max_precursor_mz:
                 continue
 
             # Apply RT filters
-            if (
-                min_precursor_rt is not None
-                and float(row["Time_Frame"]) < min_precursor_rt
-            ):
+            if min_precursor_rt is not None and float(row["Time_Frame"]) < min_precursor_rt:
                 continue
-            if (
-                max_precursor_rt is not None
-                and float(row["Time_Frame"]) > max_precursor_rt
-            ):
+            if max_precursor_rt is not None and float(row["Time_Frame"]) > max_precursor_rt:
                 continue
 
-            mz_list, area_list = td.extractCentroidedSpectrumForFrame(
+            centroid_result = td.extractCentroidedSpectrumForFrame(
                 frame_id=int(row["Frame"]),
                 scan_begin=int(row["ScanNumBegin"]),
                 scan_end=int(row["ScanNumEnd"]),
                 peak_picker_resolution=120000,
             )
+            if centroid_result is None:
+                continue
+            mz_list, area_list = centroid_result
 
             ms2_spectra = Ms2Spectra(
                 low_scan=int(row["Frame"]),
@@ -613,14 +575,15 @@ def get_ms2_prm_content(
             ms2_spectra.iso_width = float(row["IsolationWidth"])
             ms2_spectra.iso_mz = float(row["IsolationMz"])
             ms2_spectra.rt = float(row["Time_Frame"])
-            ms2_spectra.scan_begin = float(row["ScanNumBegin"])
-            ms2_spectra.scan_end = float(row["ScanNumEnd"])
+            ms2_spectra.scan_begin = int(row["ScanNumBegin"])
+            ms2_spectra.scan_end = int(row["ScanNumEnd"])
 
             ook0_range = td.scanNumToOneOverK0(
-                int(row["Frame"]), [ms2_spectra.scan_begin, ms2_spectra.scan_end]
+                int(row["Frame"]),
+                [float(ms2_spectra.scan_begin or 0), float(ms2_spectra.scan_end or 0)],
             )
-            ms2_spectra.info["OOK0_Begin"] = ook0_range[0]
-            ms2_spectra.info["OOK0_End"] = ook0_range[1]
+            ms2_spectra.info["OOK0_Begin"] = str(ook0_range[0])
+            ms2_spectra.info["OOK0_End"] = str(ook0_range[1])
 
             ms2_spectra_data = list(zip(list(mz_list), list(area_list)))
 
@@ -634,23 +597,15 @@ def get_ms2_prm_content(
                 ]
 
             if min_spectra_intensity is not None:
-                if (
-                    isinstance(min_spectra_intensity, float)
-                    and 0.0 <= min_spectra_intensity <= 1.0
-                ):
+                if isinstance(min_spectra_intensity, float) and 0.0 <= min_spectra_intensity <= 1.0:
                     # Convert percentage to absolute intensity
-                    _min_intensity = (
-                        max(area_list) * min_spectra_intensity if area_list else 0
-                    )
+                    _min_intensity = max(area_list) * min_spectra_intensity if area_list else 0
                 elif (
-                    isinstance(min_spectra_intensity, (float, int))
-                    and min_spectra_intensity > 1.0
+                    isinstance(min_spectra_intensity, (float, int)) and min_spectra_intensity > 1.0
                 ):
                     _min_intensity = min_spectra_intensity
 
-                ms2_spectra_data = [
-                    data for data in ms2_spectra_data if data[1] >= _min_intensity
-                ]
+                ms2_spectra_data = [data for data in ms2_spectra_data if data[1] >= _min_intensity]
 
             # Sort by intensity and keep top N if specified
             if top_n_spectra is not None:
@@ -673,30 +628,30 @@ def get_ms2_dda_spectra(
     remove_precursor: bool = False,
     precursor_peak_width: float = 2.0,
     batch_size: int = 100,
-    top_n_peaks: Optional[int] = None,
-    min_spectra_intensity: Optional[float] = None,
-    max_spectra_intensity: Optional[float] = None,
-    min_spectra_mz: Optional[float] = None,
-    max_spectra_mz: Optional[float] = None,
-    min_precursor_intensity: Optional[float] = None,
-    max_precursor_intensity: Optional[float] = None,
-    min_precursor_charge: Optional[int] = None,
-    max_precursor_charge: Optional[int] = None,
-    min_precursor_mz: Optional[float] = None,
-    max_precursor_mz: Optional[float] = None,
-    min_precursor_rt: Optional[float] = None,
-    max_precursor_rt: Optional[float] = None,
-    min_precursor_ccs: Optional[float] = None,
-    max_precursor_ccs: Optional[float] = None,
-    min_precursor_neutral_mass: Optional[float] = None,
-    max_precursor_neutral_mass: Optional[float] = None,
+    top_n_peaks: int | None = None,
+    min_spectra_intensity: float | None = None,
+    max_spectra_intensity: float | None = None,
+    min_spectra_mz: float | None = None,
+    max_spectra_mz: float | None = None,
+    min_precursor_intensity: float | None = None,
+    max_precursor_intensity: float | None = None,
+    min_precursor_charge: int | None = None,
+    max_precursor_charge: int | None = None,
+    min_precursor_mz: float | None = None,
+    max_precursor_mz: float | None = None,
+    min_precursor_rt: float | None = None,
+    max_precursor_rt: float | None = None,
+    min_precursor_ccs: float | None = None,
+    max_precursor_ccs: float | None = None,
+    min_precursor_neutral_mass: float | None = None,
+    max_precursor_neutral_mass: float | None = None,
 ) -> Generator[Ms2Spectra, None, None]:
     """
     Combined function that gets TDF data and generates MS2 DDA spectra in one step.
-    
+
     This function combines the functionality of get_tdf_df and get_ms2_dda_content
     to provide a single interface for extracting MS2 spectra from TimsTOF DDA data.
-    
+
     Args:
         analysis_dir: Path to the .d analysis directory
         remove_precursor: Whether to remove precursor peaks from spectra
@@ -719,11 +674,11 @@ def get_ms2_dda_spectra(
         max_precursor_ccs: Maximum precursor CCS filter
         min_precursor_neutral_mass: Minimum precursor neutral mass filter
         max_precursor_neutral_mass: Maximum precursor neutral mass filter
-    
+
     Yields:
         Ms2Spectra objects containing processed MS2 spectra
     """
-    
+
     # Get filtered TDF dataframe
     merged_df = get_tdf_df(
         analysis_dir=analysis_dir,
@@ -740,7 +695,7 @@ def get_ms2_dda_spectra(
         min_precursor_neutral_mass=min_precursor_neutral_mass,
         max_precursor_neutral_mass=max_precursor_neutral_mass,
     )
-    
+
     # Generate MS2 spectra from the filtered dataframe
     yield from get_ms2_dda_content(
         analysis_dir=analysis_dir,
