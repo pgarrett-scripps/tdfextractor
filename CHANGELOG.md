@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.6.0]
+## [0.4.0]
 ### Changed (BREAKING)
 - `write_ms2_file`, `write_mgf_file`, and `write_mzml_file` now take a single
   dataclass argument (`Ms2Args`, `MgfArgs`, `MzmlArgs`) instead of 25-31
@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
   acquisition type only runs through the writer once per test session.
 - Added a `slow` pytest marker; run `pytest -m "not slow"` to skip the
   end-to-end extraction tests during iteration.
+- `--workers` arg for parallel processing of multiple `.d` folders.
 
 ### Migration
 ```python
@@ -50,11 +51,6 @@ write_mzml_file(MzmlArgs(
     top_n_peaks=150,
 ))
 ```
-
-## [0.4.0]
-### Added
-- workers arg
-- benchmark script
 
 ## [0.3.0]
 ### Added
