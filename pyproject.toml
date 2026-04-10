@@ -10,7 +10,7 @@ authors = [
     {name = "Patrick Garrett", email = "pgarrett@scripps.edu"},
 ]
 dependencies = [
-    "tdfpy>=1.1.0",
+    "tdfpy>=1.2.0",
     "serenipy>=0.4.0",
     "psims>=1.3.5",
     "numpy",
