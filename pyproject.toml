@@ -37,10 +37,10 @@ license = {file = "LICENSE"}
 keywords = ["bruker", "timstof", "mass-spectrometry", "proteomics", "tdf", "ms2", "mgf", "mzml", "pasef"]
 
 [project.urls]
-Homepage = "https://github.com/pgarrett-scripps/tdfextractor"
-Repository = "https://github.com/pgarrett-scripps/tdfextractor"
-"Bug Tracker" = "https://github.com/pgarrett-scripps/tdfextractor/issues"
-Changelog = "https://github.com/pgarrett-scripps/tdfextractor/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/tacular-omics/tdfextractor"
+Repository = "https://github.com/tacular-omics/tdfextractor"
+"Bug Tracker" = "https://github.com/tacular-omics/tdfextractor/issues"
+Changelog = "https://github.com/tacular-omics/tdfextractor/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 # Optional compression backends for the mzML extractor. numpress-* compression
